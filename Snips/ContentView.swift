@@ -5,20 +5,30 @@
 //  Created by Adon Omeri on 9/9/2025.
 //
 
+import SwiftData
 import SwiftUI
 
 struct ContentView: View {
-    var body: some View {
-        VStack {
-            Image(systemName: "globe")
-                .imageScale(.large)
-                .foregroundStyle(.tint)
-            Text("Hello, world!")
-        }
-        .padding()
-    }
+	@Environment(\.modelContext) private var modelContext
+
+	@Query(sort: [
+		SortDescriptor(\Folder.orderIndex, order: .forward),
+		SortDescriptor(\Folder.name, order: .forward),
+	]) var folders: [Folder]
+
+	var body: some View {
+		NavigationSplitView {
+			Rectangle()
+				.overlay {
+					Text("sections")
+				}
+			List {}
+		} detail: {
+			Text("Detail View")
+		}
+	}
 }
 
 #Preview {
-    ContentView()
+	ContentView()
 }

@@ -4,110 +4,102 @@
   },
   "groups" : [
     {
-      "blur-material" : 0.25,
+      "blur-material" : 0.15,
       "layers" : [
         {
-          "blend-mode" : "normal",
-          "fill-specializations" : [
+          "fill" : "none",
+          "image-name-specializations" : [
             {
-              "value" : {
-                "solid" : "extended-gray:1.00000,1.00000"
-              }
+              "value" : "right.svg"
             },
             {
-              "appearance" : "dark",
-              "value" : {
-                "solid" : "extended-gray:1.00000,1.00000"
-              }
+              "appearance" : "light",
+              "value" : "right2.svg"
+            },
+            {
+              "appearance" : "tinted",
+              "value" : "right2.svg"
             }
           ],
-          "glass" : false,
-          "hidden" : false,
-          "image-name" : "text.svg",
-          "name" : "text",
+          "name" : "right2",
           "position" : {
-            "scale" : 1,
+            "scale" : 1.1,
             "translation-in-points" : [
-              96.2139757183077,
-              105.82598828769466
+              14.047091207487059,
+              -9.99442992131528
             ]
           }
-        },
+        }
+      ],
+      "name" : "right",
+      "position" : {
+        "scale" : 1,
+        "translation-in-points" : [
+          -0.6355141163836735,
+          0.20587077009611957
+        ]
+      },
+      "shadow" : {
+        "kind" : "neutral",
+        "opacity" : 0.5
+      },
+      "specular" : true,
+      "translucency" : {
+        "enabled" : true,
+        "value" : 0.77
+      }
+    },
+    {
+      "blur-material" : 0.5,
+      "layers" : [
         {
           "fill" : "none",
-          "glass" : true,
-          "image-name" : "note.svg",
-          "name" : "note",
+          "image-name-specializations" : [
+            {
+              "value" : "left.svg"
+            },
+            {
+              "appearance" : "light",
+              "value" : "left2.svg"
+            },
+            {
+              "appearance" : "tinted",
+              "value" : "left2.svg"
+            }
+          ],
+          "name" : "left2",
           "position" : {
-            "scale" : 1,
+            "scale" : 1.1,
             "translation-in-points" : [
-              98.2109375,
-              108.9609375
+              -37.04114119121791,
+              -40.325352030350345
             ]
           }
         }
       ],
       "lighting" : "individual",
-      "name" : "front",
+      "name" : "left",
       "position" : {
-        "scale" : 1.2,
+        "scale" : 1,
         "translation-in-points" : [
-          -31.31038795810455,
-          -44.57420095671412
+          -9.917600576804368,
+          -5.3078855072608215
         ]
       },
       "shadow" : {
         "kind" : "neutral",
-        "opacity" : 1
+        "opacity" : 0.5
       },
       "specular" : true,
       "translucency" : {
         "enabled" : true,
-        "value" : 0.5
-      }
-    },
-    {
-      "blend-mode" : "normal",
-      "blur-material" : 1,
-      "layers" : [
-        {
-          "fill" : {
-            "solid" : "srgb:1.00000,1.00000,1.00000,1.00000"
-          },
-          "image-name" : "note.svg",
-          "name" : "note",
-          "position" : {
-            "scale" : 1,
-            "translation-in-points" : [
-              -117.38008302709494,
-              -94.28092723407113
-            ]
-          }
-        }
-      ],
-      "name" : "back",
-      "position" : {
-        "scale" : 1.2,
-        "translation-in-points" : [
-          52.10514481572534,
-          29.690057517070517
-        ]
-      },
-      "shadow" : {
-        "kind" : "neutral",
-        "opacity" : 1
-      },
-      "specular" : true,
-      "translucency" : {
-        "enabled" : true,
-        "value" : 0.79
+        "value" : 0.77
       }
     }
   ],
   "supported-platforms" : {
-    "circles" : [
-      "watchOS"
-    ],
-    "squares" : "shared"
+    "squares" : [
+      "macOS"
+    ]
   }
 }

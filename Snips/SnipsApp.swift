@@ -6,12 +6,18 @@
 //
 
 import SwiftUI
+import SwiftData
 
 @main
 struct SnipsApp: App {
     var body: some Scene {
         WindowGroup {
             ContentView()
+				.modelContainer(
+					for: [Folder.self, Snippet.self],
+					isAutosaveEnabled: true
+				)
+
         }
     }
 }

@@ -11,7 +11,7 @@
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
-		A795990F2E714F6600351FF3 /* Snips.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = Snips.app; sourceTree = BUILT_PRODUCTS_DIR; };
+		A7798F562E71741F007301C4 /* Snips.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = Snips.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		A79C6F422E7056810045BC55 /* AppIcon.icon */ = {isa = PBXFileReference; lastKnownFileType = folder.iconcomposer.icon; path = AppIcon.icon; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
@@ -39,7 +39,7 @@
 			children = (
 				A79C6F422E7056810045BC55 /* AppIcon.icon */,
 				A70AC09F2E704354003D43A1 /* Snips */,
-				A795990F2E714F6600351FF3 /* Snips.app */,
+				A7798F562E71741F007301C4 /* Snips.app */,
 			);
 			sourceTree = "<group>";
 		};
@@ -65,7 +65,7 @@
 			packageProductDependencies = (
 			);
 			productName = Snips;
-			productReference = A795990F2E714F6600351FF3 /* Snips.app */;
+			productReference = A7798F562E71741F007301C4 /* Snips.app */;
 			productType = "com.apple.product-type.application";
 		};
 /* End PBXNativeTarget section */
