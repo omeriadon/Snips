@@ -19,6 +19,8 @@ struct ContentView: View {
 
 	@State private var selection: SidebarItem?
 	@State private var selectedSnippet: Snippet?
+	@State private var showAddFolderAlert = false
+	@State private var newFolderName: String = ""
 
 	@Query(sort: [
 		SortDescriptor(\Folder.orderIndex, order: .forward),
@@ -38,6 +40,19 @@ struct ContentView: View {
 		}
 	}
 
+	var contentColumnTitle: String {
+		switch selection {
+		case .all:
+			return "All"
+		case let .section(snippetType):
+			return snippetType.title
+		case let .folder(folder):
+			return folder.name
+		case nil:
+			return ""
+		}
+	}
+
 	let items = [SnippetType.path, .link, .code, .plainText, .command]
 
 	var body: some View {
@@ -45,102 +60,94 @@ struct ContentView: View {
 			let sidebarItems: [SidebarItem] = [.all] + items.map { SidebarItem.section($0) }
 
 			List(selection: $selection) {
-				Section {
-					LazyVGrid(columns: [
-						GridItem(.flexible()),
-						GridItem(.flexible()),
-					], spacing: 5) {
-						ForEach(sidebarItems, id: \.self) { item in
-							gridItemView(for: item)
-						}
+				LazyVGrid(columns: [
+					GridItem(.flexible()),
+					GridItem(.flexible()),
+				], spacing: 5) {
+					ForEach(Array(sidebarItems.enumerated()), id: \.element) { _, item in
+						gridItemView(for: item)
 					}
 				}
-				Section("Folders") {
+				.listRowBackground(Color.clear)
+				.conditional(Device.isPad()) {
+					$0.padding(.horizontal, -15)
+				}
+				Section {
 					ForEach(folders, id: \.id) { folder in
 						Text(folder.name)
 							.tag(SidebarItem.folder(folder))
 					}
+				} header: {
+					HStack {
+						Text("Folders")
+						Spacer()
+						Button {
+							newFolderName = ""
+							showAddFolderAlert = true
+						} label: {
+							Image(systemName: "plus")
+						}
+						.buttonStyle(.glass)
+						.controlSize(.small)
+					}
+					#if os(macOS)
+					.padding(.trailing, 10)
+					#endif
+					.conditional(Device.isPad()) {
+						$0
+							.padding(.trailing, -20)
+							.padding(.leading, -10)
+					}
+					.conditional(Device.isPhone()) {
+						$0.padding(.trailing, -10)
+					}
 				}
 			}
-			.toolbar {
-				Button("Add Random Snippet") {
-					let folder: Folder
-					if let existing = folders.randomElement() {
-						folder = existing
-					} else {
-						folder = Folder(
-							id: UUID(),
-							name: "Debug Folder",
-							orderIndex: 0,
-							snippets: []
-						)
-						modelContext.insert(folder)
-					}
-					let types: [SnippetType] = [.path, .link, .plainText, .code]
-					let type = types.randomElement()!
-
-					let content: String
-					switch type {
-					case .path:
-						content = "/Users/Example/Path\(Int.random(in: 1 ... 100))"
-					case .link:
-						content = "https://example.com/\(Int.random(in: 1 ... 100))"
-					case .plainText:
-						content = "Random note \(Int.random(in: 1 ... 100))"
-					case .code, .command:
-						content = "print(\"Hello \(Int.random(in: 1 ... 100))\")"
-					}
-
-					let snippet = Snippet(
-						id: UUID(),
-						title: "\(type.rawValue.capitalized) Snippet \(Int.random(in: 1 ... 1000))",
-						type: type,
-						tags: [],
-						updatedAt: Date.now,
-						folder: folder,
-						content: content,
-						note: ""
-					)
-					modelContext.insert(snippet)
-					try? modelContext.save()
-				}
-			}
-			.navigationSplitViewColumnWidth(min: 350, ideal: 400, max: 600)
+			.navigationTitle(Text("Snips"))
+			.navigationSplitViewColumnWidth(min: 270, ideal: 300, max: 600)
 		} content: {
 			Group {
 				if selectedSnippets.isEmpty {
-					List { Text("Select a snippet or folder") }
-						.listStyle(.sidebar)
-						.scrollDisabled(true)
-						.transition(.blurReplace)
+					List {
+						Text("Select a section or folder.")
+							.listRowBackground(Color.clear)
+					}
+					.listStyle(.sidebar)
+					.scrollDisabled(true)
 				} else {
 					List(selectedSnippets, selection: $selectedSnippet) { snippet in
 						Text(snippet.title)
 							.tag(snippet)
 					}
 					.listStyle(.sidebar)
-					.transition(.blurReplace)
 				}
 			}
+			.navigationTitle(Text(contentColumnTitle))
 			.toolbar {
 				Button {} label: {
 					Label("Sort", systemImage: "arrow.up.arrow.down")
 				}
 			}
-			.animation(.easeInOut(duration: 0.3), value: selectedSnippets.isEmpty)
-			.navigationSplitViewColumnWidth(min: 350, ideal: 400, max: 600)
+			.navigationSplitViewColumnWidth(min: 250, ideal: 300, max: 600)
 		} detail: {
 			if let selectedSnippet {
 				SnippetDetailView(snippet: selectedSnippet)
 			} else {
-				List { Text("Select a snippet") }
-					.listStyle(.sidebar)
-					.scrollDisabled(true)
+				List {
+					Text("Select a snippet.")
+						.listRowBackground(Color.clear)
+				}
+				.listStyle(.sidebar)
+				.scrollDisabled(true)
+				.transition(.blurReplace)
 			}
 		}
-		.onAppear {
-			selection = .all
-			selectedSnippet = allSnippets.first
+		.alert("New Folder", isPresented: $showAddFolderAlert) {
+			TextField("Name", text: $newFolderName)
+			Button("Create", role: .confirm) { createFolder() }
+			Button("Cancel", role: .cancel) { newFolderName = "" }
+		} message: {
+			Text("Enter a folder name.")
 		}
 	}
 
@@ -176,10 +183,9 @@ struct ContentView: View {
 					.frame(maxWidth: .infinity)
 
 				Text("\(snippetCount(for: item))")
-					.padding(6)
 					.font(.caption2.monospacedDigit())
 					.foregroundStyle(.black)
-					.padding(6)
+					.padding(10)
 			}
 			.animation(.easeInOut(duration: 0.2), value: selection == item)
 			.contentShape(Rectangle())
@@ -258,6 +264,21 @@ struct ContentView: View {
 			}
 			.frame(maxWidth: .infinity, maxHeight: .infinity)
 		}
+	}
+}
+
+private extension ContentView {
+	func createFolder() {
+		let trimmed = newFolderName.trimmingCharacters(in: .whitespacesAndNewlines)
+		guard !trimmed.isEmpty else { return }
+		// Prevent duplicate names (optional simple check)
+		guard !folders.contains(where: { $0.name.caseInsensitiveCompare(trimmed) == .orderedSame }) else { return }
+		let nextOrder = (folders.map { $0.orderIndex }.max() ?? -1) + 1
+		let folder = Folder(id: UUID(), name: trimmed, orderIndex: nextOrder, snippets: [])
+		modelContext.insert(folder)
+		try? modelContext.save()
+		selection = .folder(folder)
+		newFolderName = ""
 	}
 }
 
