@@ -7,12 +7,59 @@
 
 import Foundation
 import SwiftData
+import SwiftUI
 
 enum SnippetType: String, Codable {
-	case finderPath
-	case webLink
+	case path
+	case link
 	case plainText
 	case code
+	case command
+
+	var title: String {
+		switch self {
+		case .path:
+			"Paths"
+		case .link:
+			"Links"
+		case .plainText:
+			"Plain Text"
+		case .code:
+			"Code"
+		case .command:
+			"Commands"
+		}
+	}
+
+	var symbol: String {
+		switch self {
+		case .path:
+			"finder"
+		case .link:
+			"link"
+		case .plainText:
+			"text.quote"
+		case .code:
+			"ellipsis.curlybraces"
+		case .command:
+			"apple.terminal"
+		}
+	}
+
+	var color: Color {
+		switch self {
+		case .path:
+			.blue
+		case .link:
+			.green
+		case .plainText:
+			.orange
+		case .code:
+			.red
+		case .command:
+			.teal
+		}
+	}
 }
 
 @Model
