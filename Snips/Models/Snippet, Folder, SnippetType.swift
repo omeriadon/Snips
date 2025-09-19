@@ -9,7 +9,7 @@ import Foundation
 import SwiftData
 import SwiftUI
 
-enum SnippetType: String, Codable {
+enum SnippetType: String, Codable, CaseIterable {
 	case path
 	case link
 	case plainText

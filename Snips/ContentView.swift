@@ -40,6 +40,23 @@ struct ContentView: View {
 		}
 	}
 
+	var sortedSnippets: [Snippet] {
+		switch sortOption {
+		case .type:
+			return selectedSnippets.sorted { $0.type.title < $1.type.title }
+		case .typeDescending:
+			return selectedSnippets.sorted { $0.type.title > $1.type.title }
+		case .title:
+			return selectedSnippets.sorted { $0.title < $1.title }
+		case .titleDescending:
+			return selectedSnippets.sorted { $0.title > $1.title }
+		case .dateUpdated:
+			return selectedSnippets.sorted { $0.updatedAt < $1.updatedAt }
+		case .dateUpdatedDescending:
+			return selectedSnippets.sorted { $0.updatedAt > $1.updatedAt }
+		}
+	}
+
 	var contentColumnTitle: String {
 		switch selection {
 		case .all:
@@ -52,6 +69,8 @@ struct ContentView: View {
 			return ""
 		}
 	}
+
+	@State private var sortOption: SortOption = .dateUpdated
 
 	let items = [SnippetType.path, .link, .code, .plainText, .command]
 
@@ -105,6 +124,8 @@ struct ContentView: View {
 			}
 			.navigationTitle(Text("Snips"))
 			.navigationSplitViewColumnWidth(min: 270, ideal: 300, max: 600)
+
+			// MARK: - Content
 		} content: {
 			Group {
 				if selectedSnippets.isEmpty {
@@ -115,20 +136,42 @@ struct ContentView: View {
 					.listStyle(.sidebar)
 					.scrollDisabled(true)
 				} else {
-					List(selectedSnippets, selection: $selectedSnippet) { snippet in
-						Text(snippet.title)
-							.tag(snippet)
+					List(
+						sortedSnippets,
+						selection: $selectedSnippet
+					) { snippet in
+						HStack {
+							Text(snippet.title)
+							if case .section = selection {} else {
+								Spacer()
+								Image(systemName: snippet.type.symbol)
+									.imageScale(.small)
+									.foregroundStyle(.black)
+									.padding(4)
+									.glassEffect(
+										.clear.tint(snippet.type.color),
+										in: .capsule
+									)
+							}
+						}
+						.tag(snippet)
 					}
 					.listStyle(.sidebar)
 				}
 			}
 			.navigationTitle(Text(contentColumnTitle))
 			.toolbar {
-				Button {} label: {
+				Menu {
+					ForEach(SortOption.allCases, id: \.self) { option in
+						Button(option.title) { sortOption = option }
+					}
+				} label: {
 					Label("Sort", systemImage: "arrow.up.arrow.down")
 				}
 			}
 			.navigationSplitViewColumnWidth(min: 250, ideal: 300, max: 600)
+
+			// MARK: - Detail
 		} detail: {
 			if let selectedSnippet {
 				SnippetDetailView(snippet: selectedSnippet)
@@ -140,6 +183,12 @@ struct ContentView: View {
 				.listStyle(.sidebar)
 				.scrollDisabled(true)
 				.transition(.blurReplace)
+				.toolbar {
+					ToolbarItem(placement: .primaryAction) {
+						Button { /* to keep window design  */ } label: { Label("bookmark", systemImage: "bookmark") }
+							.disabled(true)
+					}
+				}
 			}
 		}
 		.alert("New Folder", isPresented: $showAddFolderAlert) {
@@ -326,4 +375,47 @@ private extension Color {
 
 #Preview {
 	ContentView()
+}
+
+enum SortOption: CaseIterable, Hashable {
+	case type
+	case typeDescending
+	case title
+	case titleDescending
+	case dateUpdated
+	case dateUpdatedDescending
+
+	var title: String {
+		switch self {
+		case .type:
+			"Type"
+		case .typeDescending:
+			"Type Descending"
+		case .title:
+			"Title"
+		case .titleDescending:
+			"Title Descending"
+		case .dateUpdated:
+			"Updated"
+		case .dateUpdatedDescending:
+			"Updated Descending"
+		}
+	}
+
+	var symbol: String {
+		switch self {
+		case .type:
+			"rectangle.on.rectangle.angled"
+		case .typeDescending:
+			"arrow.up"
+		case .title:
+			"textformat"
+		case .titleDescending:
+			"arrow.up"
+		case .dateUpdated:
+			"calendar"
+		case .dateUpdatedDescending:
+			"arrow.up"
+		}
+	}
 }

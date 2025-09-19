@@ -17,6 +17,8 @@ struct SnippetDetailView: View {
 	@State private var showingTagAlert = false
 	@State private var renameWorkingText: String = ""
 
+	@State var renameTitleText = ""
+
 	var body: some View {
 		List {
 			headerBlock
@@ -53,13 +55,30 @@ struct SnippetDetailView: View {
 				}
 				Spacer()
 				VStack(alignment: .trailing, spacing: 6) {
-					Text("Updated: \(snippet.updatedAt, format: .dateTime.year().month().day())")
-						.font(.footnote)
-						.foregroundStyle(.secondary)
-					Image(systemName: snippet.type.symbol)
-						.foregroundStyle(.black)
-						.padding(8)
-						.glassEffect(.clear.tint(snippet.type.color))
+					Text(
+						"Updated: \(snippet.updatedAt, format: .dateTime.year().month().day().hour().minute())"
+					)
+					.font(.footnote)
+					.foregroundStyle(.secondary)
+
+					Menu {
+						ForEach(SnippetType.allCases, id: \.self) { type in
+							Button {
+								snippet.type = type
+							} label: {
+								Label(type.title, systemImage: type.symbol)
+									.tint(type.color)
+							}
+						}
+					} label: {
+						Image(systemName: snippet.type.symbol)
+							.foregroundStyle(.black)
+							.padding(8)
+							.glassEffect(
+								.clear.tint(snippet.type.color),
+								in: .capsule
+							)
+					}
 				}
 			}
 			ScrollView(.horizontal, showsIndicators: false) {
@@ -68,32 +87,24 @@ struct SnippetDetailView: View {
 						Text("No tags")
 							.font(.caption)
 							.foregroundStyle(.tertiary)
-							.transition(.opacity)
 					}
 					ForEach(snippet.tags, id: \.self) { tag in
 						TagChip(tag: tag) {
-							withAnimation {
-								triggerTagAction(tag)
-							}
+							triggerTagAction(tag)
 						}
 						.glassEffect(.clear)
-						.transition(.move(edge: .leading).combined(with: .opacity))
 					}
 					Button {
-						withAnimation {
-							triggerAddTagAction()
-						}
+						triggerAddTagAction()
 					} label: {
 						Image(systemName: "plus")
 					}
 					.buttonStyle(.glassProminent)
 					.buttonBorderShape(.circle)
-					.transition(.scale.combined(with: .opacity))
 				}
-				.padding(.top, 2)
+				.padding(.vertical, 2)
 			}
 			.scrollBounceBehavior(.basedOnSize)
-			.animation(.easeInOut, value: snippet.tags)
 		}
 	}
 
@@ -102,13 +113,25 @@ struct SnippetDetailView: View {
 			.scrollContentBackground(.hidden)
 			.frame(minHeight: 140)
 			.onChange(of: snippet.content) { contentChanged() }
+		#if !os(iOS)
+			.padding(6)
+			.glassEffect(.clear, in: RoundedRectangle(cornerRadius: 15))
+//			.background(.thinMaterial)
+//			.clipShape(RoundedRectangle(cornerRadius: 15))
+		#endif
 	}
 
 	private var noteEditor: some View {
 		TextEditor(text: $snippet.note)
 			.scrollContentBackground(.hidden)
-			.frame(minHeight: 120)
+			.frame(minHeight: 80)
 			.onChange(of: snippet.note) { contentChanged() }
+		#if !os(iOS)
+			.padding(6)
+			.glassEffect(.clear, in: RoundedRectangle(cornerRadius: 15))
+//			.background(.thinMaterial)
+//			.clipShape(RoundedRectangle(cornerRadius: 15))
+		#endif
 	}
 
 	private var toolbarContent: some ToolbarContent {
