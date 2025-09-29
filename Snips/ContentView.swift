@@ -15,12 +15,16 @@ enum SidebarItem: Hashable {
 }
 
 struct ContentView: View {
+	@Environment(\.colorScheme) private var colorScheme
 	@Environment(\.modelContext) private var modelContext
 
 	@State private var selection: SidebarItem?
 	@State private var selectedSnippetID: UUID?
 	@State private var showAddFolderAlert = false
 	@State private var newFolderName: String = ""
+	@State private var editingSnippetID: UUID? = nil
+	@State private var editingText: String = ""
+	@FocusState private var isTextFieldFocused: Bool
 
 	@Query(sort: [
 		SortDescriptor(\Folder.orderIndex, order: .forward),
@@ -81,13 +85,12 @@ struct ContentView: View {
 		}
 	}
 
-	/// Map UUID selection back to a live Snippet model for the detail view
 	var selectedSnippet: Snippet? {
 		guard let id = selectedSnippetID else { return nil }
 		return allSnippets.first { $0.id == id }
 	}
 
-	@State private var sortOption: SortOption = .dateUpdated
+	@State private var sortOption: SortOption = .dateUpdatedDescending
 
 	let items = [SnippetType.path, .link, .code, .plainText, .command]
 
@@ -110,22 +113,27 @@ struct ContentView: View {
 				}
 				Section {
 					ForEach(folders, id: \.id) { folder in
-						Text(folder.name)
-							.tag(SidebarItem.folder(folder))
-							.dropDestination(for: SnippetTransfer.self) { items, _ in
-								var changedSelection: UUID? = nil
-								for transfer in items {
-									let existing = allSnippets.first(where: { $0.id == transfer.id })
-									let new = cloneSnippet(from: transfer, existing: existing) { clone in
-										clone.folder = folder
-									}
-									if existing != nil { modelContext.delete(existing!) }
-									if selectedSnippetID == existing?.id { changedSelection = new.id }
+						HStack {
+							Text(folder.name)
+							Spacer()
+							Text(folder.snippets.count.description)
+								.foregroundStyle(.secondary)
+						}
+						.tag(SidebarItem.folder(folder))
+						.dropDestination(for: SnippetTransfer.self) { items, _ in
+							var changedSelection: UUID? = nil
+							for transfer in items {
+								let existing = allSnippets.first(where: { $0.id == transfer.id })
+								let new = cloneSnippet(from: transfer, existing: existing) { clone in
+									clone.folder = folder
 								}
-								if let newSel = changedSelection { selectedSnippetID = newSel }
-								try? modelContext.save()
-								return true
+								if existing != nil { modelContext.delete(existing!) }
+								if selectedSnippetID == existing?.id { changedSelection = new.id }
 							}
+							if let newSel = changedSelection { selectedSnippetID = newSel }
+							try? modelContext.save()
+							return true
+						}
 					}
 				} header: {
 					HStack {
@@ -140,17 +148,18 @@ struct ContentView: View {
 						.buttonStyle(.glass)
 						.controlSize(.small)
 					}
+					.padding(.bottom, 5)
 					#if os(macOS)
-					.padding(.trailing, 10)
+						.padding(.trailing, 10)
 					#endif
-					.conditional(Device.isPad()) {
-						$0
-							.padding(.trailing, -20)
-							.padding(.leading, -10)
-					}
-					.conditional(Device.isPhone()) {
-						$0.padding(.trailing, -10)
-					}
+						.conditional(Device.isPad()) {
+							$0
+								.padding(.trailing, -20)
+								.padding(.leading, -10)
+						}
+						.conditional(Device.isPhone()) {
+							$0.padding(.trailing, -10)
+						}
 				}
 			}
 			.navigationTitle(Text("Snips"))
@@ -160,53 +169,103 @@ struct ContentView: View {
 		} content: {
 			Group {
 				if selectedSnippets.isEmpty {
-					List {
-						Text("Select a section or folder.")
-							.listRowBackground(Color.clear)
-					}
-					.listStyle(.sidebar)
-					.scrollDisabled(true)
-				} else {
-					List(
-						sortedSnippets,
-						selection: $selectedSnippetID
-					) { snippet in
-						HStack {
-							Text(snippet.title)
-							if case .section = selection {} else {
-								Spacer()
-								Image(systemName: snippet.type.symbol)
-									.imageScale(.small)
-									.foregroundStyle(.black)
-									.padding(4)
-									.glassEffect(
-										.clear.tint(snippet.type.color),
-										in: .capsule
-									)
-							}
+					ZStack {
+						if colorScheme == .dark {
+							List {}
+								.listStyle(.sidebar)
+						} else {
+							List {}
+								.listStyle(.plain)
 						}
-						.tag(snippet.id)
-						.draggable(snippet.transferable)
+						List {
+							Text("Select a section or folder.")
+						}
+						.listStyle(.inset)
+						.scrollContentBackground(.hidden)
+						.scrollDisabled(true)
 					}
-					.listStyle(.sidebar)
-					.id(contentListID)
+				} else {
+					ZStack {
+						if colorScheme == .dark {
+							List {}
+								.listStyle(.sidebar)
+						} else {
+							List {}
+								.listStyle(.plain)
+						}
+						List(
+							sortedSnippets,
+							selection: $selectedSnippetID
+						) { snippet in
+							HStack {
+								if editingSnippetID == snippet.id {
+									TextField("", text: $editingText)
+										.textFieldStyle(.roundedBorder)
+										.scrollContentBackground(.hidden)
+										.background(Color.clear)
+										.focused($isTextFieldFocused)
+										.onSubmit {
+											saveRename()
+										}
+										.onExitCommand {
+											cancelRename()
+										}
+								} else {
+									Text(snippet.title)
+								}
+								if case .section = selection {} else {
+									Spacer()
+									Image(systemName: snippet.type.symbol)
+										.imageScale(.small)
+										.foregroundStyle(.black)
+										.padding(4)
+										.glassEffect(
+											.clear.tint(snippet.type.color),
+											in: .capsule
+										)
+								}
+							}
+							.frame(minHeight: 25)
+							.tag(snippet.id)
+							.draggable(snippet.transferable)
+							.listRowSeparator(.hidden)
+						}
+						.listStyle(.inset)
+						.scrollContentBackground(.hidden)
+						.animation(
+							.interactiveSpring(response: 0.35, dampingFraction: 0.85),
+							value: sortedSnippets.map(\.id)
+						)
+						.id(contentListID)
+					}
 				}
 			}
 			.navigationTitle(Text(contentColumnTitle))
 			.toolbar {
 				Picker(selection: $sortOption) {
-					ForEach(SortOption.allCases, id: \.self) { option in
-						Label(option.title, systemImage: option.symbol)
-							.tag(option)
+					Section {
+						Label("Type", systemImage: "rectangle.on.rectangle.angled")
+							.tag(isAscending ? SortOption.type : SortOption.typeDescending)
+						Label("Title", systemImage: "textformat")
+							.tag(isAscending ? SortOption.title : SortOption.titleDescending)
+						Label("Updated", systemImage: "calendar")
+							.tag(isAscending ? SortOption.dateUpdated : SortOption.dateUpdatedDescending)
+					}
+
+					Divider()
+
+					Section {
+						Label("Ascending", systemImage: "arrow.up")
+							.tag(tagForOrder(true))
+						Label("Descending", systemImage: "arrow.down")
+							.tag(tagForOrder(false))
 					}
 				} label: {
 					Label("Sort", systemImage: "arrow.up.arrow.down")
 				}
-				.disabled(selection == nil)
 			}
 			.navigationSplitViewColumnWidth(min: 250, ideal: 300, max: 600)
-			// If the visible list changes and no longer contains the selected ID, clear it
-			.onChange(of: sortedSnippets.map(\.id)) { ids in
+			.onChange(of: sortedSnippets.map(\.id)) { _, ids in
 				if let sel = selectedSnippetID, !ids.contains(sel) {
 					selectedSnippetID = nil
 				}
@@ -214,20 +273,31 @@ struct ContentView: View {
 
 			// MARK: - Detail
 		} detail: {
-			if let selectedSnippet {
-				SnippetDetailView(snippet: selectedSnippet)
-			} else {
-				List {
-					Text("Select a snippet.")
-						.listRowBackground(Color.clear)
-				}
-				.listStyle(.sidebar)
-				.scrollDisabled(true)
-				.transition(.blurReplace)
-				.toolbar {
-					ToolbarItem(placement: .primaryAction) {
-						Button { /* to keep window design  */ } label: { Label("bookmark", systemImage: "bookmark") }
-							.disabled(true)
+			Group {
+				if let selectedSnippet {
+					SnippetDetailView(snippet: selectedSnippet)
+				} else {
+					ZStack {
+						if colorScheme == .dark {
+							List {}
+								.listStyle(.sidebar)
+						} else {
+							List {}
+								.listStyle(.plain)
+						}
+
+						List {
+							Text("Select a snippet.")
+						}
+						.listStyle(.inset)
+						.scrollContentBackground(.hidden)
+						.scrollDisabled(true)
+					}
+					.toolbar {
+						ToolbarItem(placement: .primaryAction) {
+							Button { /* to keep window design  */ } label: { Label("bookmark", systemImage: "bookmark") }
+								.disabled(true)
+						}
 					}
 				}
 			}
@@ -239,9 +309,53 @@ struct ContentView: View {
 		} message: {
 			Text("Enter a folder name.")
 		}
-		.onChange(of: selection) { _ in
-			// Reset snippet selection when switching sections/folders to keep list diffs stable
+		.onChange(of: selection) {
 			selectedSnippetID = nil
+			cancelRename()
+		}
+		.onChange(of: selectedSnippetID) { _, _ in
+			cancelRename()
+		}
+		.onKeyPress(.return) {
+			if editingSnippetID == nil, let selectedSnippetID = selectedSnippetID {
+				startRename(for: selectedSnippetID)
+			}
+			return .ignored
+		}
+	}
+
+	// MARK: - Sort helpers
+
+	private enum SortField { case type, title, dateUpdated }
+
+	private var currentSortField: SortField {
+		switch sortOption {
+		case .type, .typeDescending:
+			return .type
+		case .title, .titleDescending:
+			return .title
+		case .dateUpdated, .dateUpdatedDescending:
+			return .dateUpdated
+		}
+	}
+
+	private var isAscending: Bool {
+		switch sortOption {
+		case .type, .title, .dateUpdated:
+			return true
+		case .typeDescending, .titleDescending, .dateUpdatedDescending:
+			return false
+		}
+	}
+
+	private func tagForOrder(_ ascending: Bool) -> SortOption {
+		switch (currentSortField, ascending) {
+		case (.type, true): return .type
+		case (.type, false): return .typeDescending
+		case (.title, true): return .title
+		case (.title, false): return .titleDescending
+		case (.dateUpdated, true): return .dateUpdated
+		case (.dateUpdated, false): return .dateUpdatedDescending
 		}
 	}
 
@@ -279,7 +393,10 @@ struct ContentView: View {
 					.fill(gradient(for: item))
 					.overlay(
 						ConcentricRectangle(corners: .concentric, isUniform: true)
-							.stroke(selection == item ? Color.white : Color.clear, lineWidth: 4)
+							.stroke(
+								selection == item ? Color.primary : Color.clear,
+								lineWidth: 2
+							)
 					)
 					.compositingGroup()
 
@@ -299,9 +416,12 @@ struct ContentView: View {
 			.containerShape(.rect(cornerRadius: 16))
 		}
 		.buttonStyle(.plain)
-		// Enable drop onto section tiles (except All)
 		.conditional({
-			if case let .section(t) = item { return true } else { return false }
+			if case .section = item {
+				return true
+			} else {
+				return false
+			}
 		}()) { view in
 			view.dropDestination(for: SnippetTransfer.self) { items, _ in
 				var changedSelection: UUID? = nil
@@ -397,7 +517,6 @@ private extension ContentView {
 	func createFolder() {
 		let trimmed = newFolderName.trimmingCharacters(in: .whitespacesAndNewlines)
 		guard !trimmed.isEmpty else { return }
-		// Prevent duplicate names (optional simple check)
 		guard !folders.contains(where: { $0.name.caseInsensitiveCompare(trimmed) == .orderedSame }) else { return }
 		let nextOrder = (folders.map { $0.orderIndex }.max() ?? -1) + 1
 		let folder = Folder(id: UUID(), name: trimmed, orderIndex: nextOrder, snippets: [])
@@ -408,7 +527,7 @@ private extension ContentView {
 	}
 
 	@discardableResult
-	func cloneSnippet(from transfer: SnippetTransfer, existing: Snippet?, customize: (inout Snippet) -> Void = { _ in }) -> Snippet {
+	func cloneSnippet(from transfer: SnippetTransfer, existing _: Snippet?, customize: (inout Snippet) -> Void = { _ in }) -> Snippet {
 		var clone = Snippet(
 			id: UUID(),
 			title: transfer.title,
@@ -422,6 +541,37 @@ private extension ContentView {
 		customize(&clone)
 		modelContext.insert(clone)
 		return clone
+	}
+
+	func startRename(for snippetID: UUID) {
+		guard let snippet = allSnippets.first(where: { $0.id == snippetID }) else { return }
+		editingSnippetID = snippetID
+		editingText = snippet.title
+		isTextFieldFocused = true
+	}
+
+	func saveRename() {
+		guard let editingID = editingSnippetID,
+		      let snippet = allSnippets.first(where: { $0.id == editingID })
+		else {
+			cancelRename()
+			return
+		}
+
+		let trimmed = editingText.trimmingCharacters(in: .whitespacesAndNewlines)
+		if !trimmed.isEmpty {
+			snippet.title = trimmed
+			snippet.updatedAt = Date()
+			try? modelContext.save()
+		}
+
+		cancelRename()
+	}
+
+	func cancelRename() {
+		editingSnippetID = nil
+		editingText = ""
+		isTextFieldFocused = false
 	}
 }
 

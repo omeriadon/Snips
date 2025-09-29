@@ -9,6 +9,7 @@ import SwiftData
 import SwiftUI
 
 struct SnippetDetailView: View {
+	@Environment(\.colorScheme) private var colorScheme
 	@Environment(\.modelContext) private var modelContext
 	@Bindable var snippet: Snippet
 
@@ -22,16 +23,27 @@ struct SnippetDetailView: View {
 	// Track editing focus so we only update timestamps on real user edits
 	@FocusState private var isContentFocused: Bool
 	@FocusState private var isNoteFocused: Bool
-	@State private var contentDirty = false
-	@State private var noteDirty = false
 
 	var body: some View {
-		List {
-			headerBlock
-			Section("Content") { contentEditor }
-			Section("Note") { noteEditor }
+		ZStack {
+			if colorScheme == .dark {
+				List {}
+					.listStyle(.sidebar)
+			} else {
+				List {}
+					.listStyle(.plain)
+			}
+			List {
+				headerBlock
+					.listRowSeparator(.hidden)
+				Section("Content") { contentEditor }
+					.listRowSeparator(.hidden)
+				Section("Note") { noteEditor }
+					.listRowSeparator(.hidden)
+			}
+			.listStyle(.inset)
+			.scrollContentBackground(.hidden)
 		}
-		.listStyle(.sidebar)
 		.toolbar { toolbarContent }
 		.alert(tagAlertTitle, isPresented: $showingTagAlert) {
 			TextField("Tag Name", text: $renameWorkingText)
@@ -55,6 +67,10 @@ struct SnippetDetailView: View {
 						Text("\(name) /")
 							.font(.title2)
 							.foregroundStyle(.quaternary)
+					} else {
+						Text("/")
+							.font(.title2)
+							.opacity(0)
 					}
 					Text(snippet.title)
 						.font(.title)
@@ -67,24 +83,14 @@ struct SnippetDetailView: View {
 					.font(.footnote)
 					.foregroundStyle(.secondary)
 
-					Menu {
+					Picker("", selection: $snippet.type) {
 						ForEach(SnippetType.allCases, id: \.self) { type in
-							Button {
-								snippet.type = type
-							} label: {
-								Label(type.title, systemImage: type.symbol)
-									.tint(type.color)
-							}
+							Label(type.title, systemImage: type.symbol)
+								.tint(type.color)
+								.tag(type)
 						}
-					} label: {
-						Image(systemName: snippet.type.symbol)
-							.foregroundStyle(.black)
-							.padding(8)
-							.glassEffect(
-								.clear.tint(snippet.type.color),
-								in: .capsule
-							)
 					}
+					.pickerStyle(.menu)
 				}
 			}
 			ScrollView(.horizontal, showsIndicators: false) {
@@ -120,21 +126,14 @@ struct SnippetDetailView: View {
 			.scrollContentBackground(.hidden)
 			.frame(minHeight: 140)
 			.focused($isContentFocused)
-			// Mark dirty while typing, but don't update timestamps until editing ends
+			// Update timestamp immediately while typing so lists resort live
 			.onChange(of: snippet.content, initial: false) {
-				if isContentFocused { contentDirty = true }
-			}
-			.onChange(of: isContentFocused) { focused in
-				if focused == false, contentDirty {
-					contentDirty = false
-					contentChanged()
-				}
+				if isContentFocused { contentChanged() }
 			}
 		#if !os(iOS)
 			.padding(6)
-			.glassEffect(.clear, in: RoundedRectangle(cornerRadius: 15))
-//			.background(.thinMaterial)
-//			.clipShape(RoundedRectangle(cornerRadius: 15))
+			.background(.thinMaterial)
+			.clipShape(RoundedRectangle(cornerRadius: 15))
 		#endif
 	}
 
@@ -145,19 +144,12 @@ struct SnippetDetailView: View {
 			.frame(minHeight: 80)
 			.focused($isNoteFocused)
 			.onChange(of: snippet.note, initial: false) {
-				if isNoteFocused { noteDirty = true }
-			}
-			.onChange(of: isNoteFocused) { focused in
-				if focused == false, noteDirty {
-					noteDirty = false
-					contentChanged()
-				}
+				if isNoteFocused { contentChanged() }
 			}
 		#if !os(iOS)
 			.padding(6)
-			.glassEffect(.clear, in: RoundedRectangle(cornerRadius: 15))
-//			.background(.thinMaterial)
-//			.clipShape(RoundedRectangle(cornerRadius: 15))
+			.background(.thinMaterial)
+			.clipShape(RoundedRectangle(cornerRadius: 15))
 		#endif
 	}
 
@@ -172,7 +164,9 @@ struct SnippetDetailView: View {
 	private var tagAlertTitle: String { tagForAction == nil ? "New Tag" : "Tag: \(tagForAction!)" }
 
 	private func contentChanged() {
-		snippet.updatedAt = .now
+		withAnimation(.interactiveSpring(response: 0.3, dampingFraction: 0.85)) {
+			snippet.updatedAt = .now
+		}
 		try? modelContext.save()
 	}
 
