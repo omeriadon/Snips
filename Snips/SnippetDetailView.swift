@@ -19,6 +19,12 @@ struct SnippetDetailView: View {
 
 	@State var renameTitleText = ""
 
+	// Track editing focus so we only update timestamps on real user edits
+	@FocusState private var isContentFocused: Bool
+	@FocusState private var isNoteFocused: Bool
+	@State private var contentDirty = false
+	@State private var noteDirty = false
+
 	var body: some View {
 		List {
 			headerBlock
@@ -110,9 +116,20 @@ struct SnippetDetailView: View {
 
 	private var contentEditor: some View {
 		TextEditor(text: $snippet.content)
+			.id(snippet.id)
 			.scrollContentBackground(.hidden)
 			.frame(minHeight: 140)
-			.onChange(of: snippet.content) { contentChanged() }
+			.focused($isContentFocused)
+			// Mark dirty while typing, but don't update timestamps until editing ends
+			.onChange(of: snippet.content, initial: false) {
+				if isContentFocused { contentDirty = true }
+			}
+			.onChange(of: isContentFocused) { focused in
+				if focused == false, contentDirty {
+					contentDirty = false
+					contentChanged()
+				}
+			}
 		#if !os(iOS)
 			.padding(6)
 			.glassEffect(.clear, in: RoundedRectangle(cornerRadius: 15))
@@ -123,9 +140,19 @@ struct SnippetDetailView: View {
 
 	private var noteEditor: some View {
 		TextEditor(text: $snippet.note)
+			.id(snippet.id)
 			.scrollContentBackground(.hidden)
 			.frame(minHeight: 80)
-			.onChange(of: snippet.note) { contentChanged() }
+			.focused($isNoteFocused)
+			.onChange(of: snippet.note, initial: false) {
+				if isNoteFocused { noteDirty = true }
+			}
+			.onChange(of: isNoteFocused) { focused in
+				if focused == false, noteDirty {
+					noteDirty = false
+					contentChanged()
+				}
+			}
 		#if !os(iOS)
 			.padding(6)
 			.glassEffect(.clear, in: RoundedRectangle(cornerRadius: 15))

@@ -18,7 +18,7 @@ struct ContentView: View {
 	@Environment(\.modelContext) private var modelContext
 
 	@State private var selection: SidebarItem?
-	@State private var selectedSnippet: Snippet?
+	@State private var selectedSnippetID: UUID?
 	@State private var showAddFolderAlert = false
 	@State private var newFolderName: String = ""
 
@@ -41,20 +41,31 @@ struct ContentView: View {
 	}
 
 	var sortedSnippets: [Snippet] {
+		let base = uniqueByID(selectedSnippets)
 		switch sortOption {
 		case .type:
-			return selectedSnippets.sorted { $0.type.title < $1.type.title }
+			return base.sorted { $0.type.title < $1.type.title }
 		case .typeDescending:
-			return selectedSnippets.sorted { $0.type.title > $1.type.title }
+			return base.sorted { $0.type.title > $1.type.title }
 		case .title:
-			return selectedSnippets.sorted { $0.title < $1.title }
+			return base.sorted { $0.title < $1.title }
 		case .titleDescending:
-			return selectedSnippets.sorted { $0.title > $1.title }
+			return base.sorted { $0.title > $1.title }
 		case .dateUpdated:
-			return selectedSnippets.sorted { $0.updatedAt < $1.updatedAt }
+			return base.sorted { $0.updatedAt < $1.updatedAt }
 		case .dateUpdatedDescending:
-			return selectedSnippets.sorted { $0.updatedAt > $1.updatedAt }
+			return base.sorted { $0.updatedAt > $1.updatedAt }
 		}
+	}
+
+	private func uniqueByID(_ items: [Snippet]) -> [Snippet] {
+		var seen = Set<UUID>()
+		var result: [Snippet] = []
+		result.reserveCapacity(items.count)
+		for s in items {
+			if seen.insert(s.id).inserted { result.append(s) }
+		}
+		return result
 	}
 
 	var contentColumnTitle: String {
@@ -68,6 +79,12 @@ struct ContentView: View {
 		case nil:
 			return ""
 		}
+	}
+
+	/// Map UUID selection back to a live Snippet model for the detail view
+	var selectedSnippet: Snippet? {
+		guard let id = selectedSnippetID else { return nil }
+		return allSnippets.first { $0.id == id }
 	}
 
 	@State private var sortOption: SortOption = .dateUpdated
@@ -95,6 +112,20 @@ struct ContentView: View {
 					ForEach(folders, id: \.id) { folder in
 						Text(folder.name)
 							.tag(SidebarItem.folder(folder))
+							.dropDestination(for: SnippetTransfer.self) { items, _ in
+								var changedSelection: UUID? = nil
+								for transfer in items {
+									let existing = allSnippets.first(where: { $0.id == transfer.id })
+									let new = cloneSnippet(from: transfer, existing: existing) { clone in
+										clone.folder = folder
+									}
+									if existing != nil { modelContext.delete(existing!) }
+									if selectedSnippetID == existing?.id { changedSelection = new.id }
+								}
+								if let newSel = changedSelection { selectedSnippetID = newSel }
+								try? modelContext.save()
+								return true
+							}
 					}
 				} header: {
 					HStack {
@@ -138,7 +169,7 @@ struct ContentView: View {
 				} else {
 					List(
 						sortedSnippets,
-						selection: $selectedSnippet
+						selection: $selectedSnippetID
 					) { snippet in
 						HStack {
 							Text(snippet.title)
@@ -154,22 +185,32 @@ struct ContentView: View {
 									)
 							}
 						}
-						.tag(snippet)
+						.tag(snippet.id)
+						.draggable(snippet.transferable)
 					}
 					.listStyle(.sidebar)
+					.id(contentListID)
 				}
 			}
 			.navigationTitle(Text(contentColumnTitle))
 			.toolbar {
-				Menu {
+				Picker(selection: $sortOption) {
 					ForEach(SortOption.allCases, id: \.self) { option in
-						Button(option.title) { sortOption = option }
+						Label(option.title, systemImage: option.symbol)
+							.tag(option)
 					}
 				} label: {
 					Label("Sort", systemImage: "arrow.up.arrow.down")
 				}
+				.disabled(selection == nil)
 			}
 			.navigationSplitViewColumnWidth(min: 250, ideal: 300, max: 600)
+			// If the visible list changes and no longer contains the selected ID, clear it
+			.onChange(of: sortedSnippets.map(\.id)) { ids in
+				if let sel = selectedSnippetID, !ids.contains(sel) {
+					selectedSnippetID = nil
+				}
+			}
 
 			// MARK: - Detail
 		} detail: {
@@ -197,6 +238,23 @@ struct ContentView: View {
 			Button("Cancel", role: .cancel) { newFolderName = "" }
 		} message: {
 			Text("Enter a folder name.")
+		}
+		.onChange(of: selection) { _ in
+			// Reset snippet selection when switching sections/folders to keep list diffs stable
+			selectedSnippetID = nil
+		}
+	}
+
+	private var contentListID: String {
+		switch selection {
+		case .all:
+			return "all"
+		case let .section(type):
+			return "type-\(type.rawValue)"
+		case let .folder(folder):
+			return "folder-\(folder.id.uuidString)"
+		case nil:
+			return "none"
 		}
 	}
 
@@ -241,6 +299,25 @@ struct ContentView: View {
 			.containerShape(.rect(cornerRadius: 16))
 		}
 		.buttonStyle(.plain)
+		// Enable drop onto section tiles (except All)
+		.conditional({
+			if case let .section(t) = item { return true } else { return false }
+		}()) { view in
+			view.dropDestination(for: SnippetTransfer.self) { items, _ in
+				var changedSelection: UUID? = nil
+				for transfer in items {
+					let existing = allSnippets.first(where: { $0.id == transfer.id })
+					let new = cloneSnippet(from: transfer, existing: existing) { clone in
+						if case let .section(t) = item { clone.type = t }
+					}
+					if existing != nil { modelContext.delete(existing!) }
+					if selectedSnippetID == existing?.id { changedSelection = new.id }
+				}
+				if let newSel = changedSelection { selectedSnippetID = newSel }
+				try? modelContext.save()
+				return true
+			}
+		}
 	}
 
 	private func baseColor(for item: SidebarItem) -> Color {
@@ -328,6 +405,23 @@ private extension ContentView {
 		try? modelContext.save()
 		selection = .folder(folder)
 		newFolderName = ""
+	}
+
+	@discardableResult
+	func cloneSnippet(from transfer: SnippetTransfer, existing: Snippet?, customize: (inout Snippet) -> Void = { _ in }) -> Snippet {
+		var clone = Snippet(
+			id: UUID(),
+			title: transfer.title,
+			type: transfer.type,
+			tags: transfer.tags,
+			updatedAt: Date(),
+			folder: nil,
+			content: transfer.content,
+			note: transfer.note
+		)
+		customize(&clone)
+		modelContext.insert(clone)
+		return clone
 	}
 }
 

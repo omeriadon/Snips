@@ -8,6 +8,7 @@
 import Foundation
 import SwiftData
 import SwiftUI
+internal import UniformTypeIdentifiers
 
 enum SnippetType: String, Codable, CaseIterable {
 	case path
@@ -78,7 +79,7 @@ class Folder {
 }
 
 @Model
-class Snippet {
+class Snippet: Identifiable {
 	@Attribute(.unique) var id: UUID
 	var title: String
 
@@ -110,5 +111,34 @@ class Snippet {
 		self.folder = folder
 		self.content = content
 		self.note = note
+	}
+
+	var transferable: SnippetTransfer {
+		SnippetTransfer(
+			id: id,
+			title: title,
+			type: type,
+			tags: tags,
+			updatedAt: updatedAt,
+			content: content,
+			note: note
+		)
+	}
+}
+
+struct SnippetTransfer: Transferable, Hashable, Codable {
+	var id: UUID
+	var title: String
+
+	var type: SnippetType
+	var tags: [String]
+
+	var updatedAt: Date
+
+	var content: String
+	var note: String
+
+	static var transferRepresentation: some TransferRepresentation {
+		CodableRepresentation(for: SnippetTransfer.self, contentType: .data)
 	}
 }
