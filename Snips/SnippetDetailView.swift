@@ -1,4 +1,3 @@
-//
 //  SnippetDetailView.swift
 //  Snips
 //
@@ -118,11 +117,11 @@ struct SnippetDetailView: View {
 										commitTitleEdit()
 									}
 								}
-								.disabled(snippet.isDeleted)
+								.disabled(snippet.isTrashed)
 						} else {
 							Text(snippet.title)
 								.font(.title)
-								.foregroundStyle(snippet.isDeleted ? .secondary : .primary)
+								.foregroundStyle(snippet.isTrashed ? .secondary : .primary)
 								.onTapGesture {
 									beginTitleEdit()
 								}
@@ -185,19 +184,19 @@ struct SnippetDetailView: View {
 			.frame(minHeight: 140)
 			.focused($isContentFocused)
 			.onChange(of: snippet.content, initial: false) { _, newValue in
-				guard !snippet.isDeleted else { return }
+				guard !snippet.isTrashed else { return }
 				if isContentFocused, newValue != previousContent {
 					previousContent = newValue
 					contentDirty = true
 				}
 			}
 			.onChange(of: isContentFocused) { _, focused in
-				if focused == false, contentDirty, !snippet.isDeleted {
+				if focused == false, contentDirty, !snippet.isTrashed {
 					contentDirty = false
 					contentChanged()
 				}
 			}
-			.disabled(snippet.isDeleted)
+			.disabled(snippet.isTrashed)
 		#if !os(iOS)
 			.padding(6)
 			.background(.thinMaterial)
@@ -212,19 +211,19 @@ struct SnippetDetailView: View {
 			.frame(minHeight: 80)
 			.focused($isNoteFocused)
 			.onChange(of: snippet.note, initial: false) { _, newValue in
-				guard !snippet.isDeleted else { return }
+				guard !snippet.isTrashed else { return }
 				if isNoteFocused, newValue != previousNote {
 					previousNote = newValue
 					noteDirty = true
 				}
 			}
 			.onChange(of: isNoteFocused) { _, focused in
-				if focused == false, noteDirty, !snippet.isDeleted {
+				if focused == false, noteDirty, !snippet.isTrashed {
 					noteDirty = false
 					contentChanged()
 				}
 			}
-			.disabled(snippet.isDeleted)
+			.disabled(snippet.isTrashed)
 		#if !os(iOS)
 			.padding(6)
 			.background(.thinMaterial)
@@ -243,7 +242,7 @@ struct SnippetDetailView: View {
 	private var tagAlertTitle: String { tagForAction == nil ? "New Tag" : "Tag: \(tagForAction!)" }
 
 	private func beginTitleEdit() {
-		guard !snippet.isDeleted else { return }
+		guard !snippet.isTrashed else { return }
 		renameTitleText = snippet.title
 		isEditingTitle = true
 		DispatchQueue.main.async {
@@ -258,7 +257,7 @@ struct SnippetDetailView: View {
 			isEditingTitle = false
 			isTitleFocused = false
 		}
-		guard !snippet.isDeleted else { return }
+		guard !snippet.isTrashed else { return }
 		guard !trimmed.isEmpty else { return }
 		guard trimmed != snippet.title else { return }
 		snippet.title = trimmed

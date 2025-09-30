@@ -46,13 +46,13 @@ struct ContentView: View {
 		guard let selection else { return [] }
 		switch selection {
 		case .all:
-			return allSnippets.filter { !$0.isDeleted }
+			return allSnippets.filter { !$0.isTrashed }
 		case let .section(type):
-			return allSnippets.filter { $0.type == type && !$0.isDeleted }
+			return allSnippets.filter { $0.type == type && !$0.isTrashed }
 		case let .folder(folder):
-			return folder.snippets.filter { !$0.isDeleted }
+			return folder.snippets.filter { !$0.isTrashed }
 		case .trash:
-			return allSnippets.filter { $0.isDeleted }
+			return allSnippets.filter { $0.isTrashed }
 		}
 	}
 
@@ -114,15 +114,17 @@ struct ContentView: View {
 	var selectedSnippet: Snippet? {
 		guard let id = selectedSnippetID else { return nil }
 		guard let snippet = allSnippets.first(where: { $0.id == id }) else { return nil }
-		if snippet.isDeleted, selection != .trash { return nil }
+		if snippet.isTrashed, selection != .trash { return nil }
 		return snippet
 	}
 
 	@State private var sortOption: SortOption = .dateUpdatedDescending
 
-	let items = [SnippetType.path, .link, .code, .plainText, .command]
+	let items = [SnippetType.path, .link, .code, .plainText, .command, .secrets]
 
 	var body: some View {
+		// MARK: - Sidebar
+
 		NavigationSplitView {
 			let sidebarItems: [SidebarItem] = [.all] + items.map { SidebarItem.section($0) } + [.trash]
 
@@ -144,7 +146,7 @@ struct ContentView: View {
 						HStack {
 							Text(folder.name)
 							Spacer()
-							Text(folder.snippets.filter { !$0.isDeleted }.count.description)
+							Text(folder.snippets.filter { !$0.isTrashed }.count.description)
 								.foregroundStyle(.secondary)
 						}
 						.tag(SidebarItem.folder(folder))
@@ -258,7 +260,7 @@ struct ContentView: View {
 							.draggable(snippet.transferable)
 							.listRowSeparator(.hidden)
 							.contextMenu {
-								if snippet.isDeleted {
+								if snippet.isTrashed {
 									Button {
 										restoreSnippet(snippet)
 									} label: {
@@ -324,7 +326,7 @@ struct ContentView: View {
 								}
 							}
 							.swipeActions(edge: .trailing, allowsFullSwipe: false) {
-								if snippet.isDeleted {
+								if snippet.isTrashed {
 									Button {
 										restoreSnippet(snippet)
 									} label: {
@@ -361,13 +363,15 @@ struct ContentView: View {
 			}
 			.navigationTitle(Text(contentColumnTitle))
 			.toolbar {
-				ToolbarItemGroup(placement: .automatic) {
+				ToolbarItem(placement: .principal) {
 					Button {
 						startNewSnippet()
 					} label: {
 						Label("New Snippet", systemImage: "plus")
 					}
-
+				}
+				ToolbarSpacer()
+				ToolbarItem(placement: .primaryAction) {
 					Picker(selection: $sortOption) {
 						Section {
 							Label("Type", systemImage: "rectangle.on.rectangle.angled")
@@ -541,13 +545,13 @@ struct ContentView: View {
 	private func snippetCount(for item: SidebarItem) -> Int {
 		switch item {
 		case .all:
-			return allSnippets.filter { !$0.isDeleted }.count
+			return allSnippets.filter { !$0.isTrashed }.count
 		case let .section(type):
-			return allSnippets.reduce(0) { $1.type == type && !$1.isDeleted ? $0 + 1 : $0 }
+			return allSnippets.reduce(0) { $1.type == type && !$1.isTrashed ? $0 + 1 : $0 }
 		case let .folder(folder):
-			return folder.snippets.filter { !$0.isDeleted }.count
+			return folder.snippets.filter { !$0.isTrashed }.count
 		case .trash:
-			return allSnippets.filter { $0.isDeleted }.count
+			return allSnippets.filter { $0.isTrashed }.count
 		}
 	}
 
@@ -576,7 +580,7 @@ struct ContentView: View {
 
 				Text("\(snippetCount(for: item))")
 					.font(.caption2.monospacedDigit())
-					.foregroundStyle(.black)
+					.foregroundStyle(.white)
 					.padding(10)
 			}
 			.animation(.easeInOut(duration: 0.2), value: selection == item)
@@ -611,7 +615,7 @@ struct ContentView: View {
 	private func baseColor(for item: SidebarItem) -> Color {
 		switch item {
 		case .all:
-			return .accentColor
+			return Color.accent
 		case let .section(type):
 			return type.color
 		case .folder:
@@ -639,11 +643,12 @@ struct ContentView: View {
 			HStack {
 				VStack(alignment: .leading) {
 					Image(systemName: "square.grid.2x2")
-						.foregroundStyle(.black)
+						.foregroundStyle(.white)
 						.fontWeight(.bold)
 						.imageScale(.medium)
 					Text("All")
 						.font(.title3)
+						.foregroundStyle(.white)
 				}
 				.padding(.leading, 10)
 				Spacer()
@@ -654,11 +659,12 @@ struct ContentView: View {
 			HStack {
 				VStack(alignment: .leading) {
 					Image(systemName: type.symbol)
-						.foregroundStyle(.black)
+						.foregroundStyle(.white)
 						.fontWeight(.bold)
 						.imageScale(.medium)
 					Text(type.title)
 						.font(.title3)
+						.foregroundStyle(.white)
 				}
 				.padding(.leading, 10)
 				Spacer()
@@ -684,10 +690,11 @@ struct ContentView: View {
 			HStack {
 				VStack(alignment: .leading) {
 					Image(systemName: "trash")
-						.foregroundStyle(.black)
+						.foregroundStyle(.white)
 						.fontWeight(.bold)
 						.imageScale(.medium)
 					Text("Recycle Bin")
+						.foregroundStyle(.white)
 						.font(.title3)
 				}
 				.padding(.leading, 10)
@@ -709,7 +716,7 @@ private extension ContentView {
 			type: targetType,
 			tags: [],
 			updatedAt: Date(),
-			isDeleted: false,
+			isTrashed: false,
 			trashedFolderID: nil,
 			folder: targetFolder,
 			content: "",
@@ -817,7 +824,7 @@ private extension ContentView {
 	}
 
 	func startRename(for snippetID: UUID) {
-		guard let snippet = allSnippets.first(where: { $0.id == snippetID }), !snippet.isDeleted else { return }
+		guard let snippet = allSnippets.first(where: { $0.id == snippetID }), !snippet.isTrashed else { return }
 		editingSnippetID = snippetID
 		editingText = snippet.title
 		isTextFieldFocused = true
@@ -848,7 +855,7 @@ private extension ContentView {
 	}
 
 	func duplicateSnippet(_ snippet: Snippet) {
-		guard !snippet.isDeleted else { return }
+		guard !snippet.isTrashed else { return }
 		let duplicate = Snippet(
 			id: UUID(),
 			title: "\(snippet.title) Copy",
@@ -874,14 +881,14 @@ private extension ContentView {
 	}
 
 	func removeFromFolder(_ snippet: Snippet) {
-		guard !snippet.isDeleted else { return }
+		guard !snippet.isTrashed else { return }
 		snippet.folder = nil
 		snippet.updatedAt = Date()
 		try? modelContext.save()
 	}
 
 	func changeSnippetType(_ snippet: Snippet, to newType: SnippetType) {
-		guard !snippet.isDeleted else { return }
+		guard !snippet.isTrashed else { return }
 		snippet.type = newType
 		snippet.updatedAt = Date()
 		try? modelContext.save()
@@ -892,11 +899,11 @@ private extension ContentView {
 	}
 
 	func moveSnippetToTrash(_ snippet: Snippet, registerUndo: Bool = true) {
-		guard !snippet.isDeleted else { return }
+		guard !snippet.isTrashed else { return }
 		let previousFolderID = snippet.folder?.id ?? snippet.trashedFolderID
 		snippet.trashedFolderID = previousFolderID
 		snippet.folder = nil
-		snippet.isDeleted = true
+		snippet.isTrashed = true
 		snippet.updatedAt = Date()
 		if selectedSnippetID == snippet.id {
 			selectedSnippetID = nil
@@ -913,7 +920,7 @@ private extension ContentView {
 	}
 
 	func restoreSnippet(_ snippet: Snippet, registerUndo: Bool = true) {
-		guard snippet.isDeleted else { return }
+		guard snippet.isTrashed else { return }
 		let folderID = snippet.trashedFolderID
 		if let folderID,
 		   let folder = folders.first(where: { $0.id == folderID })
@@ -922,7 +929,7 @@ private extension ContentView {
 		} else {
 			snippet.folder = nil
 		}
-		snippet.isDeleted = false
+		snippet.isTrashed = false
 		snippet.trashedFolderID = nil
 		snippet.updatedAt = Date()
 		if selection == .trash {
@@ -941,7 +948,7 @@ private extension ContentView {
 	}
 
 	func deletePermanently(_ snippet: Snippet) {
-		guard snippet.isDeleted else { return }
+		guard snippet.isTrashed else { return }
 		let folderID = snippet.trashedFolderID ?? snippet.folder?.id
 		let transfer = snippet.transferable
 
@@ -960,7 +967,7 @@ private extension ContentView {
 					type: transfer.type,
 					tags: transfer.tags,
 					updatedAt: Date(),
-					isDeleted: true,
+					isTrashed: true,
 					trashedFolderID: folderID,
 					folder: nil,
 					content: transfer.content,

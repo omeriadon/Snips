@@ -16,6 +16,7 @@ enum SnippetType: String, Codable, CaseIterable {
 	case plainText
 	case code
 	case command
+	case secrets
 
 	var title: String {
 		switch self {
@@ -29,6 +30,8 @@ enum SnippetType: String, Codable, CaseIterable {
 			"Code"
 		case .command:
 			"Commands"
+		case .secrets:
+			"Secrets"
 		}
 	}
 
@@ -44,6 +47,8 @@ enum SnippetType: String, Codable, CaseIterable {
 			"ellipsis.curlybraces"
 		case .command:
 			"apple.terminal"
+		case .secrets:
+			"ellipsis.rectangle"
 		}
 	}
 
@@ -59,6 +64,8 @@ enum SnippetType: String, Codable, CaseIterable {
 			.red
 		case .command:
 			.teal
+		case .secrets:
+			.pink
 		}
 	}
 }
@@ -88,7 +95,7 @@ class Snippet: Identifiable {
 
 	var updatedAt: Date
 
-	var isDeleted: Bool
+	var isTrashed: Bool
 	var trashedFolderID: UUID?
 
 	@Relationship var folder: Folder?
@@ -102,7 +109,7 @@ class Snippet: Identifiable {
 		type: SnippetType,
 		tags: [String],
 		updatedAt: Date,
-		isDeleted: Bool = false,
+		isTrashed: Bool = false,
 		trashedFolderID: UUID? = nil,
 		folder: Folder? = nil,
 		content: String,
@@ -113,7 +120,7 @@ class Snippet: Identifiable {
 		self.type = type
 		self.tags = tags
 		self.updatedAt = updatedAt
-		self.isDeleted = isDeleted
+		self.isTrashed = isTrashed
 		self.trashedFolderID = trashedFolderID
 		self.folder = folder
 		self.content = content
