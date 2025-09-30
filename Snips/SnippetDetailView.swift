@@ -23,6 +23,10 @@ struct SnippetDetailView: View {
 	// Track editing focus so we only update timestamps on real user edits
 	@FocusState private var isContentFocused: Bool
 	@FocusState private var isNoteFocused: Bool
+	@State private var contentDirty = false
+	@State private var noteDirty = false
+	@State private var previousContent = ""
+	@State private var previousNote = ""
 
 	var body: some View {
 		ZStack {
@@ -57,6 +61,16 @@ struct SnippetDetailView: View {
 		} message: {
 			Text(tagForAction == nil ? "Create a new tag." : "Rename or delete this tag.")
 		}
+		.onAppear {
+			previousContent = snippet.content
+			previousNote = snippet.note
+		}
+		.onChange(of: snippet.id) {
+			previousContent = snippet.content
+			previousNote = snippet.note
+			contentDirty = false
+			noteDirty = false
+		}
 	}
 
 	private var headerBlock: some View {
@@ -67,13 +81,19 @@ struct SnippetDetailView: View {
 						Text("\(name) /")
 							.font(.title2)
 							.foregroundStyle(.quaternary)
+							.animation(.easeInOut, value: snippet.folder?.name)
+							.contentTransition(.numericText())
 					} else {
 						Text("/")
 							.font(.title2)
 							.opacity(0)
+							.animation(.easeInOut, value: snippet.folder?.name)
+							.contentTransition(.numericText())
 					}
 					Text(snippet.title)
 						.font(.title)
+						.animation(.easeInOut, value: snippet.title)
+						.contentTransition(.numericText())
 				}
 				Spacer()
 				VStack(alignment: .trailing, spacing: 6) {
@@ -82,6 +102,8 @@ struct SnippetDetailView: View {
 					)
 					.font(.footnote)
 					.foregroundStyle(.secondary)
+					.animation(.easeInOut, value: snippet.updatedAt)
+					.contentTransition(.numericText())
 
 					Picker("", selection: $snippet.type) {
 						ForEach(SnippetType.allCases, id: \.self) { type in
@@ -126,9 +148,17 @@ struct SnippetDetailView: View {
 			.scrollContentBackground(.hidden)
 			.frame(minHeight: 140)
 			.focused($isContentFocused)
-			// Update timestamp immediately while typing so lists resort live
-			.onChange(of: snippet.content, initial: false) {
-				if isContentFocused { contentChanged() }
+			.onChange(of: snippet.content, initial: false) { _, newValue in
+				if isContentFocused, newValue != previousContent {
+					previousContent = newValue
+					contentDirty = true
+				}
+			}
+			.onChange(of: isContentFocused) { _, focused in
+				if focused == false, contentDirty {
+					contentDirty = false
+					contentChanged()
+				}
 			}
 		#if !os(iOS)
 			.padding(6)
@@ -143,8 +173,17 @@ struct SnippetDetailView: View {
 			.scrollContentBackground(.hidden)
 			.frame(minHeight: 80)
 			.focused($isNoteFocused)
-			.onChange(of: snippet.note, initial: false) {
-				if isNoteFocused { contentChanged() }
+			.onChange(of: snippet.note, initial: false) { _, newValue in
+				if isNoteFocused, newValue != previousNote {
+					previousNote = newValue
+					noteDirty = true
+				}
+			}
+			.onChange(of: isNoteFocused) { _, focused in
+				if focused == false, noteDirty {
+					noteDirty = false
+					contentChanged()
+				}
 			}
 		#if !os(iOS)
 			.padding(6)
@@ -168,6 +207,8 @@ struct SnippetDetailView: View {
 			snippet.updatedAt = .now
 		}
 		try? modelContext.save()
+		previousContent = snippet.content
+		previousNote = snippet.note
 	}
 
 	private func triggerTagAction(_ tag: String) {

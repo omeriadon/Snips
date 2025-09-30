@@ -7,6 +7,11 @@
 
 import SwiftData
 import SwiftUI
+#if os(macOS)
+	import AppKit
+#elseif os(iOS)
+	import UIKit
+#endif
 
 enum SidebarItem: Hashable {
 	case all
@@ -24,6 +29,8 @@ struct ContentView: View {
 	@State private var newFolderName: String = ""
 	@State private var editingSnippetID: UUID? = nil
 	@State private var editingText: String = ""
+	@State private var showDeleteConfirmation = false
+	@State private var snippetToDelete: Snippet?
 	@FocusState private var isTextFieldFocused: Bool
 
 	@Query(sort: [
@@ -229,12 +236,73 @@ struct ContentView: View {
 							.tag(snippet.id)
 							.draggable(snippet.transferable)
 							.listRowSeparator(.hidden)
+							.contextMenu {
+								Button {
+									startRename(for: snippet.id)
+								} label: {
+									Label("Rename", systemImage: "pencil")
+								}
+
+								Button {
+									duplicateSnippet(snippet)
+								} label: {
+									Label("Duplicate", systemImage: "doc.on.doc")
+								}
+
+								Button {
+									copyToClipboard(snippet.content)
+								} label: {
+									Label("Copy Content", systemImage: "doc.on.clipboard")
+								}
+
+								Menu {
+									ForEach(SnippetType.allCases, id: \.self) { type in
+										Button {
+											changeSnippetType(snippet, to: type)
+										} label: {
+											Label(type.title, systemImage: type.symbol)
+										}
+									}
+								} label: {
+									Label("Change Type", systemImage: "arrow.triangle.2.circlepath")
+								}
+
+								if snippet.folder != nil {
+									Button {
+										removeFromFolder(snippet)
+									} label: {
+										Label("Remove from Folder", systemImage: "folder.badge.minus")
+									}
+								}
+
+								Divider()
+
+								Button(role: .destructive) {
+									snippetToDelete = snippet
+									showDeleteConfirmation = true
+								} label: {
+									Label("Delete", systemImage: "trash")
+										.foregroundStyle(.red)
+								}
+							}
+							.swipeActions(
+								edge: .trailing,
+								allowsFullSwipe: true
+							) {
+								Button(role: .destructive) {
+									snippetToDelete = snippet
+									showDeleteConfirmation = true
+								} label: {
+									Label("Delete", systemImage: "trash")
+								}
+
+							}
 						}
 						.listStyle(.inset)
 						.scrollContentBackground(.hidden)
 						.animation(
 							.interactiveSpring(response: 0.35, dampingFraction: 0.85),
-							value: sortedSnippets.map(\.id)
+							value: allSnippets.map(\.id)
 						)
 						.id(contentListID)
 					}
@@ -308,6 +376,20 @@ struct ContentView: View {
 			Button("Cancel", role: .cancel) { newFolderName = "" }
 		} message: {
 			Text("Enter a folder name.")
+		}
+		.alert("Delete Snippet", isPresented: $showDeleteConfirmation) {
+			Button("Delete", role: .destructive) {
+				if let snippet = snippetToDelete {
+					deleteSnippet(snippet)
+				}
+			}
+			Button("Cancel", role: .cancel) {
+				snippetToDelete = nil
+			}
+		} message: {
+			if let snippet = snippetToDelete {
+				Text("Are you sure you want to delete '\(snippet.title)'? This action cannot be undone.")
+			}
 		}
 		.onChange(of: selection) {
 			selectedSnippetID = nil
@@ -572,6 +654,52 @@ private extension ContentView {
 		editingSnippetID = nil
 		editingText = ""
 		isTextFieldFocused = false
+	}
+
+	func duplicateSnippet(_ snippet: Snippet) {
+		let duplicate = Snippet(
+			id: UUID(),
+			title: "\(snippet.title) Copy",
+			type: snippet.type,
+			tags: snippet.tags,
+			updatedAt: Date(),
+			folder: snippet.folder,
+			content: snippet.content,
+			note: snippet.note
+		)
+		modelContext.insert(duplicate)
+		try? modelContext.save()
+		selectedSnippetID = duplicate.id
+	}
+
+	func copyToClipboard(_ content: String) {
+		#if os(macOS)
+			NSPasteboard.general.clearContents()
+			NSPasteboard.general.setString(content, forType: .string)
+		#elseif os(iOS)
+			UIPasteboard.general.string = content
+		#endif
+	}
+
+	func removeFromFolder(_ snippet: Snippet) {
+		snippet.folder = nil
+		snippet.updatedAt = Date()
+		try? modelContext.save()
+	}
+
+	func changeSnippetType(_ snippet: Snippet, to newType: SnippetType) {
+		snippet.type = newType
+		snippet.updatedAt = Date()
+		try? modelContext.save()
+	}
+
+	func deleteSnippet(_ snippet: Snippet) {
+		if selectedSnippetID == snippet.id {
+			selectedSnippetID = nil
+		}
+		modelContext.delete(snippet)
+		try? modelContext.save()
+		snippetToDelete = nil
 	}
 }
 
