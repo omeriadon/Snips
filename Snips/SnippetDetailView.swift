@@ -21,12 +21,14 @@ struct SnippetDetailView: View {
 	@State var renameTitleText = ""
 
 	// Track editing focus so we only update timestamps on real user edits
+	@FocusState private var isTitleFocused: Bool
 	@FocusState private var isContentFocused: Bool
 	@FocusState private var isNoteFocused: Bool
 	@State private var contentDirty = false
 	@State private var noteDirty = false
 	@State private var previousContent = ""
 	@State private var previousNote = ""
+	@State private var isEditingTitle = false
 
 	var body: some View {
 		ZStack {
@@ -39,6 +41,12 @@ struct SnippetDetailView: View {
 			}
 			List {
 				headerBlock
+					.onAppear {
+						if snippet.title == "New Snippet" {
+							isEditingTitle = true
+							isTitleFocused = true
+						}
+					}
 					.listRowSeparator(.hidden)
 				Section("Content") { contentEditor }
 					.listRowSeparator(.hidden)
@@ -64,12 +72,20 @@ struct SnippetDetailView: View {
 		.onAppear {
 			previousContent = snippet.content
 			previousNote = snippet.note
+			renameTitleText = snippet.title
 		}
 		.onChange(of: snippet.id) {
 			previousContent = snippet.content
 			previousNote = snippet.note
 			contentDirty = false
 			noteDirty = false
+			renameTitleText = snippet.title
+			isEditingTitle = false
+		}
+		.onChange(of: snippet.title, initial: false) { _, newValue in
+			if !isEditingTitle {
+				renameTitleText = newValue
+			}
 		}
 	}
 
@@ -90,10 +106,30 @@ struct SnippetDetailView: View {
 							.animation(.easeInOut, value: snippet.folder?.name)
 							.contentTransition(.numericText())
 					}
-					Text(snippet.title)
-						.font(.title)
-						.animation(.easeInOut, value: snippet.title)
-						.contentTransition(.numericText())
+					Group {
+						if isEditingTitle {
+							TextField("Title", text: $renameTitleText)
+								.font(.title)
+								.textFieldStyle(.roundedBorder)
+								.focused($isTitleFocused)
+								.onSubmit { commitTitleEdit() }
+								.onChange(of: isTitleFocused) { _, focused in
+									if focused == false {
+										commitTitleEdit()
+									}
+								}
+								.disabled(snippet.isDeleted)
+						} else {
+							Text(snippet.title)
+								.font(.title)
+								.foregroundStyle(snippet.isDeleted ? .secondary : .primary)
+								.onTapGesture {
+									beginTitleEdit()
+								}
+								.animation(.easeInOut, value: snippet.title)
+								.contentTransition(.numericText())
+						}
+					}
 				}
 				Spacer()
 				VStack(alignment: .trailing, spacing: 6) {
@@ -149,17 +185,19 @@ struct SnippetDetailView: View {
 			.frame(minHeight: 140)
 			.focused($isContentFocused)
 			.onChange(of: snippet.content, initial: false) { _, newValue in
+				guard !snippet.isDeleted else { return }
 				if isContentFocused, newValue != previousContent {
 					previousContent = newValue
 					contentDirty = true
 				}
 			}
 			.onChange(of: isContentFocused) { _, focused in
-				if focused == false, contentDirty {
+				if focused == false, contentDirty, !snippet.isDeleted {
 					contentDirty = false
 					contentChanged()
 				}
 			}
+			.disabled(snippet.isDeleted)
 		#if !os(iOS)
 			.padding(6)
 			.background(.thinMaterial)
@@ -174,17 +212,19 @@ struct SnippetDetailView: View {
 			.frame(minHeight: 80)
 			.focused($isNoteFocused)
 			.onChange(of: snippet.note, initial: false) { _, newValue in
+				guard !snippet.isDeleted else { return }
 				if isNoteFocused, newValue != previousNote {
 					previousNote = newValue
 					noteDirty = true
 				}
 			}
 			.onChange(of: isNoteFocused) { _, focused in
-				if focused == false, noteDirty {
+				if focused == false, noteDirty, !snippet.isDeleted {
 					noteDirty = false
 					contentChanged()
 				}
 			}
+			.disabled(snippet.isDeleted)
 		#if !os(iOS)
 			.padding(6)
 			.background(.thinMaterial)
@@ -201,6 +241,32 @@ struct SnippetDetailView: View {
 	// MARK: - Tag Actions
 
 	private var tagAlertTitle: String { tagForAction == nil ? "New Tag" : "Tag: \(tagForAction!)" }
+
+	private func beginTitleEdit() {
+		guard !snippet.isDeleted else { return }
+		renameTitleText = snippet.title
+		isEditingTitle = true
+		DispatchQueue.main.async {
+			isTitleFocused = true
+		}
+	}
+
+	private func commitTitleEdit() {
+		let trimmed = renameTitleText.trimmingCharacters(in: .whitespacesAndNewlines)
+		defer {
+			renameTitleText = snippet.title
+			isEditingTitle = false
+			isTitleFocused = false
+		}
+		guard !snippet.isDeleted else { return }
+		guard !trimmed.isEmpty else { return }
+		guard trimmed != snippet.title else { return }
+		snippet.title = trimmed
+		withAnimation(.interactiveSpring(response: 0.3, dampingFraction: 0.85)) {
+			snippet.updatedAt = .now
+		}
+		try? modelContext.save()
+	}
 
 	private func contentChanged() {
 		withAnimation(.interactiveSpring(response: 0.3, dampingFraction: 0.85)) {

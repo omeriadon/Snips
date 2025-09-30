@@ -17,13 +17,15 @@ enum SidebarItem: Hashable {
 	case all
 	case section(SnippetType)
 	case folder(Folder)
+	case trash
 }
 
 struct ContentView: View {
 	@Environment(\.colorScheme) private var colorScheme
 	@Environment(\.modelContext) private var modelContext
+	@Environment(\.undoManager) private var undoManager
 
-	@State private var selection: SidebarItem?
+	@State private var selection: SidebarItem? = .all
 	@State private var selectedSnippetID: UUID?
 	@State private var showAddFolderAlert = false
 	@State private var newFolderName: String = ""
@@ -31,6 +33,7 @@ struct ContentView: View {
 	@State private var editingText: String = ""
 	@State private var showDeleteConfirmation = false
 	@State private var snippetToDelete: Snippet?
+	@State private var newSnippetDraft: Snippet?
 	@FocusState private var isTextFieldFocused: Bool
 
 	@Query(sort: [
@@ -43,11 +46,13 @@ struct ContentView: View {
 		guard let selection else { return [] }
 		switch selection {
 		case .all:
-			return allSnippets
+			return allSnippets.filter { !$0.isDeleted }
 		case let .section(type):
-			return allSnippets.filter { $0.type == type }
+			return allSnippets.filter { $0.type == type && !$0.isDeleted }
 		case let .folder(folder):
-			return folder.snippets
+			return folder.snippets.filter { !$0.isDeleted }
+		case .trash:
+			return allSnippets.filter { $0.isDeleted }
 		}
 	}
 
@@ -87,14 +92,30 @@ struct ContentView: View {
 			return snippetType.title
 		case let .folder(folder):
 			return folder.name
+		case .trash:
+			return "Recycle Bin"
 		case nil:
 			return ""
 		}
 	}
 
+	var emptyStateMessage: String {
+		guard let selection else { return "Select a section or folder." }
+		switch selection {
+		case .all:
+			return "No snippets yet. Create one to get started."
+		case .trash:
+			return "Recycle Bin is empty."
+		case .section, .folder:
+			return "Nothing to show here yet."
+		}
+	}
+
 	var selectedSnippet: Snippet? {
 		guard let id = selectedSnippetID else { return nil }
-		return allSnippets.first { $0.id == id }
+		guard let snippet = allSnippets.first(where: { $0.id == id }) else { return nil }
+		if snippet.isDeleted, selection != .trash { return nil }
+		return snippet
 	}
 
 	@State private var sortOption: SortOption = .dateUpdatedDescending
@@ -103,7 +124,7 @@ struct ContentView: View {
 
 	var body: some View {
 		NavigationSplitView {
-			let sidebarItems: [SidebarItem] = [.all] + items.map { SidebarItem.section($0) }
+			let sidebarItems: [SidebarItem] = [.all] + items.map { SidebarItem.section($0) } + [.trash]
 
 			List(selection: $selection) {
 				LazyVGrid(columns: [
@@ -123,7 +144,7 @@ struct ContentView: View {
 						HStack {
 							Text(folder.name)
 							Spacer()
-							Text(folder.snippets.count.description)
+							Text(folder.snippets.filter { !$0.isDeleted }.count.description)
 								.foregroundStyle(.secondary)
 						}
 						.tag(SidebarItem.folder(folder))
@@ -185,7 +206,7 @@ struct ContentView: View {
 								.listStyle(.plain)
 						}
 						List {
-							Text("Select a section or folder.")
+							Text(emptyStateMessage)
 						}
 						.listStyle(.inset)
 						.scrollContentBackground(.hidden)
@@ -237,65 +258,95 @@ struct ContentView: View {
 							.draggable(snippet.transferable)
 							.listRowSeparator(.hidden)
 							.contextMenu {
-								Button {
-									startRename(for: snippet.id)
-								} label: {
-									Label("Rename", systemImage: "pencil")
-								}
+								if snippet.isDeleted {
+									Button {
+										restoreSnippet(snippet)
+									} label: {
+										Label("Restore", systemImage: "arrow.uturn.backward")
+									}
 
-								Button {
-									duplicateSnippet(snippet)
-								} label: {
-									Label("Duplicate", systemImage: "doc.on.doc")
-								}
+									Divider()
 
-								Button {
-									copyToClipboard(snippet.content)
-								} label: {
-									Label("Copy Content", systemImage: "doc.on.clipboard")
-								}
+									Button(role: .destructive) {
+										deletePermanently(snippet)
+									} label: {
+										Label("Delete Permanently", systemImage: "trash.fill")
+											.foregroundStyle(.red)
+									}
+								} else {
+									Button {
+										startRename(for: snippet.id)
+									} label: {
+										Label("Rename", systemImage: "pencil")
+									}
 
-								Menu {
-									ForEach(SnippetType.allCases, id: \.self) { type in
+									Button {
+										duplicateSnippet(snippet)
+									} label: {
+										Label("Duplicate", systemImage: "doc.on.doc")
+									}
+
+									Button {
+										copyToClipboard(snippet.content)
+									} label: {
+										Label("Copy Content", systemImage: "doc.on.clipboard")
+									}
+
+									Menu {
+										ForEach(SnippetType.allCases, id: \.self) { type in
+											Button {
+												changeSnippetType(snippet, to: type)
+											} label: {
+												Label(type.title, systemImage: type.symbol)
+											}
+										}
+									} label: {
+										Label("Change Type", systemImage: "arrow.triangle.2.circlepath")
+									}
+
+									if snippet.folder != nil {
 										Button {
-											changeSnippetType(snippet, to: type)
+											removeFromFolder(snippet)
 										} label: {
-											Label(type.title, systemImage: type.symbol)
+											Label("Remove from Folder", systemImage: "folder.badge.minus")
 										}
 									}
-								} label: {
-									Label("Change Type", systemImage: "arrow.triangle.2.circlepath")
-								}
 
-								if snippet.folder != nil {
-									Button {
-										removeFromFolder(snippet)
+									Divider()
+
+									Button(role: .destructive) {
+										snippetToDelete = snippet
+										showDeleteConfirmation = true
 									} label: {
-										Label("Remove from Folder", systemImage: "folder.badge.minus")
+										Label("Move to Recycle Bin", systemImage: "trash")
+											.foregroundStyle(.red)
 									}
 								}
-
-								Divider()
-
-								Button(role: .destructive) {
-									snippetToDelete = snippet
-									showDeleteConfirmation = true
-								} label: {
-									Label("Delete", systemImage: "trash")
-										.foregroundStyle(.red)
-								}
 							}
-							.swipeActions(
-								edge: .trailing,
-								allowsFullSwipe: true
-							) {
-								Button(role: .destructive) {
-									snippetToDelete = snippet
-									showDeleteConfirmation = true
-								} label: {
-									Label("Delete", systemImage: "trash")
-								}
+							.swipeActions(edge: .trailing, allowsFullSwipe: false) {
+								if snippet.isDeleted {
+									Button {
+										restoreSnippet(snippet)
+									} label: {
+										Label("Restore", systemImage: "arrow.uturn.backward")
+									}
+									.tint(.green)
 
+									Button(role: .destructive) {
+										deletePermanently(snippet)
+									} label: {
+										Label("Delete", systemImage: "trash")
+									}
+									.tint(.red)
+								} else {
+									Button(role: .destructive) {
+										snippetToDelete = snippet
+										showDeleteConfirmation = true
+									} label: {
+										Label("Delete", systemImage: "trash")
+									}
+									.tint(.red)
+								}
 							}
 						}
 						.listStyle(.inset)
@@ -310,26 +361,34 @@ struct ContentView: View {
 			}
 			.navigationTitle(Text(contentColumnTitle))
 			.toolbar {
-				Picker(selection: $sortOption) {
-					Section {
-						Label("Type", systemImage: "rectangle.on.rectangle.angled")
-							.tag(isAscending ? SortOption.type : SortOption.typeDescending)
-						Label("Title", systemImage: "textformat")
-							.tag(isAscending ? SortOption.title : SortOption.titleDescending)
-						Label("Updated", systemImage: "calendar")
-							.tag(isAscending ? SortOption.dateUpdated : SortOption.dateUpdatedDescending)
+				ToolbarItemGroup(placement: .automatic) {
+					Button {
+						startNewSnippet()
+					} label: {
+						Label("New Snippet", systemImage: "plus")
 					}
 
-					Divider()
+					Picker(selection: $sortOption) {
+						Section {
+							Label("Type", systemImage: "rectangle.on.rectangle.angled")
+								.tag(isAscending ? SortOption.type : SortOption.typeDescending)
+							Label("Title", systemImage: "textformat")
+								.tag(isAscending ? SortOption.title : SortOption.titleDescending)
+							Label("Updated", systemImage: "calendar")
+								.tag(isAscending ? SortOption.dateUpdated : SortOption.dateUpdatedDescending)
+						}
 
-					Section {
-						Label("Ascending", systemImage: "arrow.up")
-							.tag(tagForOrder(true))
-						Label("Descending", systemImage: "arrow.down")
-							.tag(tagForOrder(false))
+						Divider()
+
+						Section {
+							Label("Ascending", systemImage: "arrow.up")
+								.tag(tagForOrder(true))
+							Label("Descending", systemImage: "arrow.down")
+								.tag(tagForOrder(false))
+						}
+					} label: {
+						Label("Sort", systemImage: "arrow.up.arrow.down")
 					}
-				} label: {
-					Label("Sort", systemImage: "arrow.up.arrow.down")
 				}
 			}
 			.navigationSplitViewColumnWidth(min: 250, ideal: 300, max: 600)
@@ -377,8 +436,8 @@ struct ContentView: View {
 		} message: {
 			Text("Enter a folder name.")
 		}
-		.alert("Delete Snippet", isPresented: $showDeleteConfirmation) {
-			Button("Delete", role: .destructive) {
+		.alert("Move to Recycle Bin", isPresented: $showDeleteConfirmation) {
+			Button("Move", role: .destructive) {
 				if let snippet = snippetToDelete {
 					deleteSnippet(snippet)
 				}
@@ -388,7 +447,7 @@ struct ContentView: View {
 			}
 		} message: {
 			if let snippet = snippetToDelete {
-				Text("Are you sure you want to delete '\(snippet.title)'? This action cannot be undone.")
+				Text("Move '\(snippet.title)' to the Recycle Bin? You can restore it later.")
 			}
 		}
 		.onChange(of: selection) {
@@ -403,6 +462,29 @@ struct ContentView: View {
 				startRename(for: selectedSnippetID)
 			}
 			return .ignored
+		}
+		.sheet(item: $newSnippetDraft) { snippet in
+			NavigationStack {
+				SnippetDetailView(snippet: snippet)
+					.toolbar {
+						ToolbarItem(placement: .cancellationAction) {
+							Button(role: .cancel) {
+								cancelNewSnippet(snippet)
+							} label: {
+								Label("Cancel", systemImage: "xmark")
+							}
+						}
+						ToolbarItem(placement: .confirmationAction) {
+							Button(role: .confirm) {
+								completeNewSnippet(snippet)
+							} label: {
+								Label("Add", systemImage: "checkmark")
+							}
+						}
+					}
+			}
+			.frame(minWidth: 350, minHeight: 500)
+			.interactiveDismissDisabled(true)
 		}
 	}
 
@@ -449,6 +531,8 @@ struct ContentView: View {
 			return "type-\(type.rawValue)"
 		case let .folder(folder):
 			return "folder-\(folder.id.uuidString)"
+		case .trash:
+			return "trash"
 		case nil:
 			return "none"
 		}
@@ -457,11 +541,13 @@ struct ContentView: View {
 	private func snippetCount(for item: SidebarItem) -> Int {
 		switch item {
 		case .all:
-			return allSnippets.count
+			return allSnippets.filter { !$0.isDeleted }.count
 		case let .section(type):
-			return allSnippets.reduce(0) { $1.type == type ? $0 + 1 : $0 }
+			return allSnippets.reduce(0) { $1.type == type && !$1.isDeleted ? $0 + 1 : $0 }
 		case let .folder(folder):
-			return folder.snippets.count
+			return folder.snippets.filter { !$0.isDeleted }.count
+		case .trash:
+			return allSnippets.filter { $0.isDeleted }.count
 		}
 	}
 
@@ -530,6 +616,8 @@ struct ContentView: View {
 			return type.color
 		case .folder:
 			return Color.gray.opacity(0.35)
+		case .trash:
+			return Color.gray.opacity(0.25)
 		}
 	}
 
@@ -591,11 +679,114 @@ struct ContentView: View {
 				Spacer()
 			}
 			.frame(maxWidth: .infinity, maxHeight: .infinity)
+
+		case .trash:
+			HStack {
+				VStack(alignment: .leading) {
+					Image(systemName: "trash")
+						.foregroundStyle(.black)
+						.fontWeight(.bold)
+						.imageScale(.medium)
+					Text("Recycle Bin")
+						.font(.title3)
+				}
+				.padding(.leading, 10)
+				Spacer()
+			}
+			.frame(maxWidth: .infinity, maxHeight: .infinity)
 		}
 	}
 }
 
 private extension ContentView {
+	func startNewSnippet() {
+		guard newSnippetDraft == nil else { return }
+		let targetFolder = defaultFolderForNewSnippet()
+		let targetType = defaultTypeForNewSnippet()
+		let snippet = Snippet(
+			id: UUID(),
+			title: "New Snippet",
+			type: targetType,
+			tags: [],
+			updatedAt: Date(),
+			isDeleted: false,
+			trashedFolderID: nil,
+			folder: targetFolder,
+			content: "",
+			note: ""
+		)
+		modelContext.insert(snippet)
+		try? modelContext.save()
+		newSnippetDraft = snippet
+
+		let targetSelection = selectionForNewSnippet(folder: targetFolder, type: targetType)
+		if selection != targetSelection {
+			selection = targetSelection
+		}
+	}
+
+	func cancelNewSnippet(_ snippet: Snippet) {
+		if selectedSnippetID == snippet.id {
+			selectedSnippetID = nil
+		}
+		modelContext.delete(snippet)
+		try? modelContext.save()
+		newSnippetDraft = nil
+	}
+
+	func completeNewSnippet(_ snippet: Snippet) {
+		snippet.updatedAt = Date()
+		try? modelContext.save()
+		newSnippetDraft = nil
+
+		let targetSelection = selectionForCompletedSnippet(snippet)
+		if selection != targetSelection {
+			selection = targetSelection
+			DispatchQueue.main.async {
+				selectedSnippetID = snippet.id
+			}
+		} else {
+			selectedSnippetID = snippet.id
+		}
+	}
+
+	func defaultFolderForNewSnippet() -> Folder? {
+		if case let .folder(folder) = selection {
+			return folder
+		}
+		return nil
+	}
+
+	func defaultTypeForNewSnippet() -> SnippetType {
+		if case let .section(type) = selection {
+			return type
+		}
+		return .plainText
+	}
+
+	func selectionForNewSnippet(folder: Folder?, type: SnippetType) -> SidebarItem {
+		if let folder {
+			return .folder(folder)
+		}
+		switch selection {
+		case .section:
+			return .section(type)
+		case .trash, nil:
+			return .all
+		case .all:
+			return .all
+		case .folder:
+			return .all
+		}
+	}
+
+	func selectionForCompletedSnippet(_ snippet: Snippet) -> SidebarItem {
+		if let folder = snippet.folder {
+			return .folder(folder)
+		}
+		return .section(snippet.type)
+	}
+
 	func createFolder() {
 		let trimmed = newFolderName.trimmingCharacters(in: .whitespacesAndNewlines)
 		guard !trimmed.isEmpty else { return }
@@ -626,7 +817,7 @@ private extension ContentView {
 	}
 
 	func startRename(for snippetID: UUID) {
-		guard let snippet = allSnippets.first(where: { $0.id == snippetID }) else { return }
+		guard let snippet = allSnippets.first(where: { $0.id == snippetID }), !snippet.isDeleted else { return }
 		editingSnippetID = snippetID
 		editingText = snippet.title
 		isTextFieldFocused = true
@@ -657,6 +848,7 @@ private extension ContentView {
 	}
 
 	func duplicateSnippet(_ snippet: Snippet) {
+		guard !snippet.isDeleted else { return }
 		let duplicate = Snippet(
 			id: UUID(),
 			title: "\(snippet.title) Copy",
@@ -682,24 +874,103 @@ private extension ContentView {
 	}
 
 	func removeFromFolder(_ snippet: Snippet) {
+		guard !snippet.isDeleted else { return }
 		snippet.folder = nil
 		snippet.updatedAt = Date()
 		try? modelContext.save()
 	}
 
 	func changeSnippetType(_ snippet: Snippet, to newType: SnippetType) {
+		guard !snippet.isDeleted else { return }
 		snippet.type = newType
 		snippet.updatedAt = Date()
 		try? modelContext.save()
 	}
 
 	func deleteSnippet(_ snippet: Snippet) {
+		moveSnippetToTrash(snippet)
+	}
+
+	func moveSnippetToTrash(_ snippet: Snippet, registerUndo: Bool = true) {
+		guard !snippet.isDeleted else { return }
+		let previousFolderID = snippet.folder?.id ?? snippet.trashedFolderID
+		snippet.trashedFolderID = previousFolderID
+		snippet.folder = nil
+		snippet.isDeleted = true
+		snippet.updatedAt = Date()
+		if selectedSnippetID == snippet.id {
+			selectedSnippetID = nil
+		}
+		try? modelContext.save()
+		snippetToDelete = nil
+
+		if registerUndo, let undoManager {
+			undoManager.registerUndo(withTarget: snippet) { target in
+				restoreSnippet(target, registerUndo: true)
+			}
+			undoManager.setActionName("Restore Snippet")
+		}
+	}
+
+	func restoreSnippet(_ snippet: Snippet, registerUndo: Bool = true) {
+		guard snippet.isDeleted else { return }
+		let folderID = snippet.trashedFolderID
+		if let folderID,
+		   let folder = folders.first(where: { $0.id == folderID })
+		{
+			snippet.folder = folder
+		} else {
+			snippet.folder = nil
+		}
+		snippet.isDeleted = false
+		snippet.trashedFolderID = nil
+		snippet.updatedAt = Date()
+		if selection == .trash {
+			selectedSnippetID = nil
+		} else {
+			selectedSnippetID = snippet.id
+		}
+		try? modelContext.save()
+
+		if registerUndo, let undoManager {
+			undoManager.registerUndo(withTarget: snippet) { target in
+				moveSnippetToTrash(target, registerUndo: true)
+			}
+			undoManager.setActionName("Move to Recycle Bin")
+		}
+	}
+
+	func deletePermanently(_ snippet: Snippet) {
+		guard snippet.isDeleted else { return }
+		let folderID = snippet.trashedFolderID ?? snippet.folder?.id
+		let transfer = snippet.transferable
+
 		if selectedSnippetID == snippet.id {
 			selectedSnippetID = nil
 		}
 		modelContext.delete(snippet)
 		try? modelContext.save()
 		snippetToDelete = nil
+
+		if let undoManager {
+			undoManager.registerUndo(withTarget: modelContext) { context in
+				let restored = Snippet(
+					id: transfer.id,
+					title: transfer.title,
+					type: transfer.type,
+					tags: transfer.tags,
+					updatedAt: Date(),
+					isDeleted: true,
+					trashedFolderID: folderID,
+					folder: nil,
+					content: transfer.content,
+					note: transfer.note
+				)
+				context.insert(restored)
+				try? context.save()
+			}
+			undoManager.setActionName("Restore Snippet")
+		}
 	}
 }
 

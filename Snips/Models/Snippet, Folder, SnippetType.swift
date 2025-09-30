@@ -88,6 +88,9 @@ class Snippet: Identifiable {
 
 	var updatedAt: Date
 
+	var isDeleted: Bool
+	var trashedFolderID: UUID?
+
 	@Relationship var folder: Folder?
 
 	var content: String
@@ -99,6 +102,8 @@ class Snippet: Identifiable {
 		type: SnippetType,
 		tags: [String],
 		updatedAt: Date,
+		isDeleted: Bool = false,
+		trashedFolderID: UUID? = nil,
 		folder: Folder? = nil,
 		content: String,
 		note: String
@@ -108,6 +113,8 @@ class Snippet: Identifiable {
 		self.type = type
 		self.tags = tags
 		self.updatedAt = updatedAt
+		self.isDeleted = isDeleted
+		self.trashedFolderID = trashedFolderID
 		self.folder = folder
 		self.content = content
 		self.note = note
