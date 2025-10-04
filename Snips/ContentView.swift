@@ -227,10 +227,10 @@ struct ContentView: View {
 							sortedSnippets,
 							selection: $selectedSnippetID
 						) { snippet in
-							HStack {
+							HStack(spacing: 0) {
 								if editingSnippetID == snippet.id {
 									TextField("", text: $editingText)
-										.textFieldStyle(.roundedBorder)
+										.textFieldStyle(GoodStyle())
 										.scrollContentBackground(.hidden)
 										.background(Color.clear)
 										.focused($isTextFieldFocused)
@@ -243,6 +243,25 @@ struct ContentView: View {
 								} else {
 									Text(snippet.title)
 								}
+								Spacer(minLength: 10)
+								if editingSnippetID == nil || editingSnippetID != snippet.id {
+									Text(snippet.content)
+										.foregroundStyle(.secondary)
+										.lineLimit(1)
+										.truncationMode(.tail) // useful for single-line
+										.mask(
+											LinearGradient(
+												gradient: Gradient(stops: [
+													.init(color: .black, location: 0.75), // fully opaque until 70% in
+													.init(color: .clear, location: 1.0), // fades to transparent at the very end
+												]),
+												startPoint: .leading,
+												endPoint: .trailing
+											)
+										)
+								}
+
+								Spacer()
 								if case .section = selection {} else {
 									Spacer()
 									Image(systemName: snippet.type.symbol)
