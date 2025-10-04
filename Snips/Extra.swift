@@ -38,12 +38,3 @@ class Device {
 		#endif
 	}
 }
-
-struct GoodStyle: TextFieldStyle {
-	func _body(configuration: TextField<Self._Label>) -> some View {
-		configuration
-			.padding(3)
-			.background(.clear)
-			.clipShape(RoundedRectangle(cornerRadius: 5))
-	}
-}

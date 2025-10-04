@@ -35,6 +35,7 @@ struct ContentView: View {
 	@State private var snippetToDelete: Snippet?
 	@State private var newSnippetDraft: Snippet?
 	@FocusState private var isTextFieldFocused: Bool
+	@FocusState private var isSnippetListFocused: Bool
 
 	@Query(sort: [
 		SortDescriptor(\Folder.orderIndex, order: .forward),
@@ -229,8 +230,8 @@ struct ContentView: View {
 						) { snippet in
 							HStack(spacing: 0) {
 								if editingSnippetID == snippet.id {
-									TextField("", text: $editingText)
-										.textFieldStyle(GoodStyle())
+									TextField("Snippet", text: $editingText)
+										.textFieldStyle(.roundedBorder)
 										.scrollContentBackground(.hidden)
 										.background(Color.clear)
 										.focused($isTextFieldFocused)
@@ -372,6 +373,8 @@ struct ContentView: View {
 						}
 						.listStyle(.inset)
 						.scrollContentBackground(.hidden)
+						.focused($isSnippetListFocused)
+						.onAppear { isSnippetListFocused = true }
 						.animation(
 							.interactiveSpring(response: 0.35, dampingFraction: 0.85),
 							value: allSnippets.map(\.id)
@@ -481,10 +484,10 @@ struct ContentView: View {
 			cancelRename()
 		}
 		.onKeyPress(.return) {
-			if editingSnippetID == nil, let selectedSnippetID = selectedSnippetID {
-				startRename(for: selectedSnippetID)
-			}
-			return .ignored
+			guard isSnippetListFocused else { return .ignored }
+			guard editingSnippetID == nil, let selectedSnippetID = selectedSnippetID else { return .ignored }
+			startRename(for: selectedSnippetID)
+			return .handled
 		}
 		.sheet(item: $newSnippetDraft) { snippet in
 			NavigationStack {
