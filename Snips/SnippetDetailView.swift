@@ -6,7 +6,6 @@
 
 import CodeEditor
 import SwiftData
-import SwiftShell
 import SwiftUI
 
 struct SnippetDetailView: View {
@@ -291,6 +290,9 @@ struct SnippetDetailView: View {
 		} message: {
 			Text(unableToActionMessage)
 		}
+
+		// MARK: - Command Sheet
+
 		.sheet(
 			isPresented: $showCommandSheet,
 			onDismiss: {
@@ -331,80 +333,29 @@ struct SnippetDetailView: View {
 					}
 				}
 				.onAppear {
-					DispatchQueue.global(qos: .userInitiated).async {
-						let lines = snippet.content
-							.split(separator: "\n")
-							.map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
-							.filter { !$0.isEmpty }
-
-						for line in lines {
-							let parts = line.split(separator: " ").map { String($0) }
-							guard let executable = parts.first else { continue }
-							let args = Array(parts.dropFirst())
-
-							// Check if executable exists
-							let whichResult = run("/usr/bin/which", executable)
-							if !whichResult.succeeded {
-								DispatchQueue.main.async {
-									commandOutput.append("Executable not found: \(executable)\n")
-									commandSucceeded = false
-									commandIsRunning = false
-								}
-								continue
+					#if os(macOS)
+						runSwiftShell(
+							commands: snippet.content
+								.split(separator: "\n")
+								.map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
+								.filter { !$0.isEmpty }
+						) { outputLine, isRunning, success in
+							commandOutput.append(outputLine + "\n")
+							if commandOutput.count > 5000 {
+								commandOutput.removeFirst(commandOutput.count - 5000)
 							}
-
-							do {
-								let command = runAsync(executable, args)
-
-								// stdout
-								DispatchQueue.global(qos: .utility).async {
-									for l in command.stdout.lines() {
-										DispatchQueue.main.async {
-											commandOutput.append(l + "\n")
-											if commandOutput.count > 5000 {
-												commandOutput.removeFirst(commandOutput.count - 5000)
-											}
-										}
-									}
-								}
-
-								// stderr
-								DispatchQueue.global(qos: .utility).async {
-									for l in command.stderror.lines() {
-										DispatchQueue.main.async {
-											commandOutput.append("[stderr] " + l + "\n")
-											if commandOutput.count > 5000 {
-												commandOutput.removeFirst(commandOutput.count - 5000)
-											}
-										}
-									}
-								}
-
-								try command.finish()
-
-								DispatchQueue.main.async {
-									commandSucceeded = command.exitcode() == 0
-								}
-							} catch {
-								DispatchQueue.main.async {
-									commandOutput.append("Failed to run command '\(line)': \(error)\n")
-									commandSucceeded = false
-								}
+							commandIsRunning = isRunning
+							if let s = success {
+								commandSucceeded = s
 							}
 						}
-
-						DispatchQueue.main.async {
-							commandIsRunning = false
-						}
-					}
+					#endif
 				}
 			}
 			.interactiveDismissDisabled()
 			.presentationDetents([.large])
 			.presentationDragIndicator(.hidden)
-			.presentationPreventsAppTermination(true)
 		}
-
 		.id(snippet.id)
 		.scrollContentBackground(.hidden)
 		.frame(minHeight: snippet.type == .code ? 400 : 250, maxHeight: .infinity)

@@ -1,5 +1,5 @@
 {
-  "originHash" : "768ee952ba498e5693d2d14e31bc4022732a038ee415104cfbc0ff505ba1ceac",
+  "originHash" : "e1cea58c9c25ba75f113fbdd13e85f2448c20c9600c13cfdbe2a35371950d1b2",
   "pins" : [
     {
       "identity" : "codeeditor",
@@ -22,10 +22,10 @@
     {
       "identity" : "swiftshell",
       "kind" : "remoteSourceControl",
-      "location" : "https://github.com/kareman/SwiftShell",
+      "location" : "https://github.com/omeriadon/swiftshell",
       "state" : {
-        "revision" : "99680b2efc7c7dbcace1da0b3979d266f02e213c",
-        "version" : "5.1.0"
+        "branch" : "master",
+        "revision" : "703d0d1e5fa441c0426f3743c58b143cc219d7bb"
       }
     }
   ],
