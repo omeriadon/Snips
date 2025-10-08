@@ -695,8 +695,11 @@ struct ContentView: View {
 					Image(systemName: "square.grid.2x2")
 						.fontWeight(.bold)
 						.imageScale(.medium)
+						.foregroundStyle(.white)
+
 					Text("All")
 						.font(.title3)
+						.foregroundStyle(.white)
 				}
 				.padding(.leading, 10)
 				Spacer()

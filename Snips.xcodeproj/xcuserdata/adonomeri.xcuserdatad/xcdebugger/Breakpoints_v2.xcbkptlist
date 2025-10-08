@@ -14,8 +14,8 @@
             filePath = "Snips/ContentView.swift"
             startingColumnNumber = "9223372036854775807"
             endingColumnNumber = "9223372036854775807"
-            startingLineNumber = "728"
-            endingLineNumber = "728"
+            startingLineNumber = "732"
+            endingLineNumber = "732"
             landmarkName = "itemInnerContent(for:)"
             landmarkType = "7">
          </BreakpointContent>

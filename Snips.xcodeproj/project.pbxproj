@@ -8,6 +8,7 @@
 
 /* Begin PBXBuildFile section */
 		A716AD532E96525F00EDBB30 /* CodeEditor in Frameworks */ = {isa = PBXBuildFile; productRef = A716AD522E96525F00EDBB30 /* CodeEditor */; };
+		A716AD562E9671A500EDBB30 /* SwiftShell in Frameworks */ = {isa = PBXBuildFile; productRef = A716AD552E9671A500EDBB30 /* SwiftShell */; };
 		A79C6F432E7056820045BC55 /* AppIcon.icon in Resources */ = {isa = PBXBuildFile; fileRef = A79C6F422E7056810045BC55 /* AppIcon.icon */; };
 /* End PBXBuildFile section */
 
@@ -30,6 +31,7 @@
 			buildActionMask = 2147483647;
 			files = (
 				A716AD532E96525F00EDBB30 /* CodeEditor in Frameworks */,
+				A716AD562E9671A500EDBB30 /* SwiftShell in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -66,6 +68,7 @@
 			name = Snips;
 			packageProductDependencies = (
 				A716AD522E96525F00EDBB30 /* CodeEditor */,
+				A716AD552E9671A500EDBB30 /* SwiftShell */,
 			);
 			productName = Snips;
 			productReference = A7798F562E71741F007301C4 /* Snips.app */;
@@ -97,6 +100,7 @@
 			minimizedProjectReferenceProxies = 1;
 			packageReferences = (
 				A716AD512E96525F00EDBB30 /* XCRemoteSwiftPackageReference "CodeEditor" */,
+				A716AD542E9671A500EDBB30 /* XCRemoteSwiftPackageReference "SwiftShell" */,
 			);
 			preferredProjectObjectVersion = 77;
 			productRefGroup = A70AC0942E704354003D43A1;
@@ -406,6 +410,14 @@
 				minimumVersion = 1.2.6;
 			};
 		};
+		A716AD542E9671A500EDBB30 /* XCRemoteSwiftPackageReference "SwiftShell" */ = {
+			isa = XCRemoteSwiftPackageReference;
+			repositoryURL = "https://github.com/kareman/SwiftShell";
+			requirement = {
+				kind = upToNextMajorVersion;
+				minimumVersion = 5.1.0;
+			};
+		};
 /* End XCRemoteSwiftPackageReference section */
 
 /* Begin XCSwiftPackageProductDependency section */
@@ -413,6 +425,11 @@
 			isa = XCSwiftPackageProductDependency;
 			package = A716AD512E96525F00EDBB30 /* XCRemoteSwiftPackageReference "CodeEditor" */;
 			productName = CodeEditor;
+		};
+		A716AD552E9671A500EDBB30 /* SwiftShell */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = A716AD542E9671A500EDBB30 /* XCRemoteSwiftPackageReference "SwiftShell" */;
+			productName = SwiftShell;
 		};
 /* End XCSwiftPackageProductDependency section */
 	};

@@ -6,6 +6,7 @@
 
 import CodeEditor
 import SwiftData
+import SwiftShell
 import SwiftUI
 
 struct SnippetDetailView: View {
@@ -25,14 +26,30 @@ struct SnippetDetailView: View {
 	@FocusState private var isTitleFocused: Bool
 	@FocusState private var isContentFocused: Bool
 	@FocusState private var isNoteFocused: Bool
+
 	@State private var contentDirty = false
 	@State private var noteDirty = false
+
 	@State private var previousContent = ""
 	@State private var previousNote = ""
+
 	@State private var isEditingTitle = false
+
 	@State private var contentOriginalValue = ""
 	@State private var noteOriginalValue = ""
+
 	@State private var showingDeleteConfirmation = false
+
+	@State private var typeSelection: SnippetType = .plainText
+
+	@State private var showUnableToActionAlert = false
+	@State private var unableToActionMessage = ""
+	@State private var unableToActionTitle = ""
+
+	@State private var commandOutput = ""
+	@State private var commandIsRunning = true
+	@State private var commandSucceeded: Bool = false
+	@State private var showCommandSheet = false
 
 	// MARK: - body
 
@@ -56,8 +73,16 @@ struct SnippetDetailView: View {
 						}
 					}
 					.listRowSeparator(.hidden)
-				Section("Content") { contentEditor }
-					.listRowSeparator(.hidden)
+				Section { contentEditor } header: {
+					Text("Content")
+				} footer: {
+					if snippet.type == .command {
+						Text("Put each command on a new line.")
+					} else if snippet.type == .link {
+						Text("Do not inlcude `https://` in the link.")
+					}
+				}
+				.listRowSeparator(.hidden)
 				Section("Note") { noteEditor }
 					.listRowSeparator(.hidden)
 			}
@@ -97,6 +122,7 @@ struct SnippetDetailView: View {
 			renameTitleText = snippet.title
 			contentOriginalValue = snippet.content
 			noteOriginalValue = snippet.note
+			typeSelection = snippet.type
 		}
 		.onChange(of: snippet.id) {
 			previousContent = snippet.content
@@ -107,11 +133,15 @@ struct SnippetDetailView: View {
 			isEditingTitle = false
 			contentOriginalValue = snippet.content
 			noteOriginalValue = snippet.note
+			typeSelection = snippet.type
 		}
 		.onChange(of: snippet.title, initial: false) { _, newValue in
 			if !isEditingTitle {
 				renameTitleText = newValue
 			}
+		}
+		.onChange(of: snippet.type, initial: false) { _, newValue in
+			typeSelection = newValue
 		}
 	}
 
@@ -125,14 +155,10 @@ struct SnippetDetailView: View {
 						Text("\(name) /")
 							.font(.title2)
 							.foregroundStyle(.quaternary)
-							.animation(.easeInOut, value: snippet.folder?.name)
-							.contentTransition(.numericText())
 					} else {
 						Text("/")
 							.font(.title2)
 							.opacity(0)
-							.animation(.easeInOut, value: snippet.folder?.name)
-							.contentTransition(.numericText())
 					}
 					Group {
 						if isEditingTitle {
@@ -154,8 +180,6 @@ struct SnippetDetailView: View {
 								.onTapGesture {
 									beginTitleEdit()
 								}
-								.animation(.easeInOut, value: snippet.title)
-								.contentTransition(.numericText())
 						}
 					}
 				}
@@ -167,7 +191,7 @@ struct SnippetDetailView: View {
 					.font(.footnote)
 					.foregroundStyle(.secondary)
 
-					Picker("", selection: $snippet.type) {
+					Picker("", selection: $typeSelection) {
 						ForEach(SnippetType.allCases, id: \.self) { type in
 							Label(type.title, systemImage: type.symbol)
 								.tint(type.color)
@@ -175,14 +199,8 @@ struct SnippetDetailView: View {
 						}
 					}
 					.pickerStyle(.menu)
-					.onChange(of: snippet.type, initial: false) { oldValue, newValue in
-						guard !snippet.isTrashed else { return }
-						guard oldValue != newValue else { return }
-						finalizeChange(
-							actionName: "Change Snippet Type",
-							applyUndo: { target in target.type = oldValue },
-							applyRedo: { target in target.type = newValue }
-						)
+					.onChange(of: typeSelection) { _, newValue in
+						commitTypeChange(newValue)
 					}
 				}
 			}
@@ -218,13 +236,44 @@ struct SnippetDetailView: View {
 	private var contentEditor: some View {
 		Group {
 			if snippet.type == .code {
-				CodeEditor(
-					source: $snippet.content,
-					language: snippet.language,
-					theme: CodeEditor.ThemeName(rawValue: "atelier-dune-dark"),
-					allowsUndo: true
-				)
-				.clipShape(RoundedRectangle(cornerRadius: 9))
+				if colorScheme == .dark {
+					CodeEditor(
+						source: $snippet.content,
+						language: snippet.language,
+						theme: CodeEditor.ThemeName(rawValue: "atelier-dune-dark"),
+						allowsUndo: true
+					)
+					.clipShape(RoundedRectangle(cornerRadius: 9))
+
+				} else {
+					CodeEditor(
+						source: $snippet.content,
+						language: snippet.language,
+						theme: CodeEditor.ThemeName(rawValue: "atelier-dune"),
+						allowsUndo: true
+					)
+					.clipShape(RoundedRectangle(cornerRadius: 9))
+				}
+
+			} else if snippet.type == .command {
+				if colorScheme == .dark {
+					CodeEditor(
+						source: $snippet.content,
+						language: CodeEditor.Language.bash,
+						theme: CodeEditor.ThemeName(rawValue: "atelier-dune-dark"),
+						allowsUndo: true
+					)
+					.clipShape(RoundedRectangle(cornerRadius: 9))
+
+				} else {
+					CodeEditor(
+						source: $snippet.content,
+						language: CodeEditor.Language.bash,
+						theme: CodeEditor.ThemeName(rawValue: "atelier-dune"),
+						allowsUndo: true
+					)
+					.clipShape(RoundedRectangle(cornerRadius: 9))
+				}
 
 			} else {
 				TextEditor(text: $snippet.content)
@@ -233,6 +282,129 @@ struct SnippetDetailView: View {
 					.font(.title3)
 			}
 		}
+		.alert(
+			unableToActionTitle, isPresented: $showUnableToActionAlert
+		) {
+			Button {} label: {
+				Text("OK")
+			}
+		} message: {
+			Text(unableToActionMessage)
+		}
+		.sheet(
+			isPresented: $showCommandSheet,
+			onDismiss: {
+				commandOutput = ""
+				commandSucceeded = false
+				commandIsRunning = true
+			}
+		) {
+			NavigationStack {
+				ScrollView {
+					Text(commandOutput)
+						.font(.system(.body, design: .monospaced))
+						.textSelection(.enabled)
+				}
+				.navigationTitle(snippet.content)
+				.toolbar {
+					ToolbarItem(placement: .confirmationAction) {
+						Button {
+							showCommandSheet = false
+						} label: {
+							if commandIsRunning {
+								ProgressView()
+									.progressViewStyle(.linear)
+									.frame(width: 50, height: 15)
+							} else if commandSucceeded {
+								Image(systemName: "checkmark")
+									.frame(height: 15)
+							} else {
+								Image(systemName: "xmark")
+									.frame(height: 15)
+							}
+						}
+						.buttonStyle(.glassProminent)
+						.controlSize(.extraLarge)
+						.buttonBorderShape(.roundedRectangle)
+						.tint(commandIsRunning ? .gray : commandSucceeded ? .green : .red)
+						.keyboardShortcut(.escape)
+					}
+				}
+				.onAppear {
+					DispatchQueue.global(qos: .userInitiated).async {
+						let lines = snippet.content
+							.split(separator: "\n")
+							.map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
+							.filter { !$0.isEmpty }
+
+						for line in lines {
+							let parts = line.split(separator: " ").map { String($0) }
+							guard let executable = parts.first else { continue }
+							let args = Array(parts.dropFirst())
+
+							// Check if executable exists
+							let whichResult = run("/usr/bin/which", executable)
+							if !whichResult.succeeded {
+								DispatchQueue.main.async {
+									commandOutput.append("Executable not found: \(executable)\n")
+									commandSucceeded = false
+									commandIsRunning = false
+								}
+								continue
+							}
+
+							do {
+								let command = runAsync(executable, args)
+
+								// stdout
+								DispatchQueue.global(qos: .utility).async {
+									for l in command.stdout.lines() {
+										DispatchQueue.main.async {
+											commandOutput.append(l + "\n")
+											if commandOutput.count > 5000 {
+												commandOutput.removeFirst(commandOutput.count - 5000)
+											}
+										}
+									}
+								}
+
+								// stderr
+								DispatchQueue.global(qos: .utility).async {
+									for l in command.stderror.lines() {
+										DispatchQueue.main.async {
+											commandOutput.append("[stderr] " + l + "\n")
+											if commandOutput.count > 5000 {
+												commandOutput.removeFirst(commandOutput.count - 5000)
+											}
+										}
+									}
+								}
+
+								try command.finish()
+
+								DispatchQueue.main.async {
+									commandSucceeded = command.exitcode() == 0
+								}
+							} catch {
+								DispatchQueue.main.async {
+									commandOutput.append("Failed to run command '\(line)': \(error)\n")
+									commandSucceeded = false
+								}
+							}
+						}
+
+						DispatchQueue.main.async {
+							commandIsRunning = false
+						}
+					}
+				}
+			}
+			.interactiveDismissDisabled()
+			.presentationDetents([.large])
+			.presentationDragIndicator(.hidden)
+			.presentationPreventsAppTermination(true)
+		}
+
 		.id(snippet.id)
 		.scrollContentBackground(.hidden)
 		.frame(minHeight: snippet.type == .code ? 400 : 250, maxHeight: .infinity)
@@ -301,47 +473,116 @@ struct SnippetDetailView: View {
 
 	private var toolbarContent: some ToolbarContent {
 		Group {
-			if snippet.type == .code {
-				ToolbarItem(placement: .confirmationAction) {
-					Menu {
-						Picker(selection: $snippet.language) {
-							ForEach(CodeEditor.availableLanguages) { language in
-								Text("\(language.rawValue.capitalized)")
-									.fontDesign(.monospaced)
-									.tag(language)
+			ToolbarItem(placement: .confirmationAction) {
+				switch snippet.type {
+				case .path:
+					AnyView(
+						Button {
+							if Device.isMac() {
+								openInFinder(snippet.content)
+							} else {
+								unableToActionTitle = "Cannot Open Path"
+								unableToActionMessage = "You need to use a Mac to open file paths."
+								showUnableToActionAlert = true
 							}
-						} label: {}
-							.pickerStyle(.inline)
-					} label: {
-						Label("Language", systemImage: "paintpalette")
-					}
+
+						} label: {
+							if Device.isMac() {
+								Label("Open Path", systemImage: "finder")
+							} else {
+								Label("Can't Open Path", systemImage: "exclamationmark.triangle")
+									.foregroundStyle(.yellow)
+							}
+						}
+					)
+
+				case .link:
+					AnyView(
+						Button {
+							if !openURL(snippet.content) {
+								unableToActionTitle = "Invalid URL"
+								unableToActionMessage = "You need to use a valid URL."
+								showUnableToActionAlert = true
+							}
+
+						} label: {
+							Label("Open URL", systemImage: "link")
+						}
+					)
+
+				case .plainText:
+					AnyView(EmptyView())
+
+				case .code:
+					AnyView(
+						Menu {
+							Picker(selection: $snippet.language) {
+								ForEach(CodeEditor.availableLanguages) { language in
+									Text("\(language.rawValue.capitalized)")
+										.fontDesign(.monospaced)
+										.tag(language)
+								}
+							} label: {}
+								.pickerStyle(.inline)
+						} label: {
+							Label("Language", systemImage: "paintpalette")
+						}
+					)
+
+				case .command:
+					AnyView(
+						Button {
+							if Device.isMac() {
+								showCommandSheet = true
+							} else {
+								unableToActionTitle = "Cannot Run Command"
+								unableToActionMessage = "You need to use a Mac to run commands."
+								showUnableToActionAlert = true
+							}
+
+						} label: {
+							if Device.isMac() {
+								Label("Run Command", systemImage: "terminal")
+							} else {
+								Label("Can't Run Command", systemImage: "exclamationmark.triangle")
+									.foregroundStyle(.yellow)
+							}
+						}
+					)
+
+				case .secrets:
+					AnyView(EmptyView())
+				}
+			}
+
+			ToolbarItem(placement: .primaryAction) {
+				Button {
+					copyToClipboard(snippet.content)
+				} label: {
+					Label("Copy", systemImage: "document.on.document")
 				}
 			}
 
 			if snippet.isTrashed {
 				ToolbarItem(placement: .primaryAction) {
-					AnyView(
-						Button {
-							restoreSnippet()
-						} label: {
-							Label("Restore", systemImage: "arrow.uturn.backward")
-						}
-						.disabled(!snippet.isTrashed)
-					)
+					Button {
+						restoreSnippet()
+					} label: {
+						Label("Restore", systemImage: "arrow.uturn.backward")
+					}
+					.disabled(!snippet.isTrashed)
 				}
 			} else {
 				ToolbarItem(placement: .destructiveAction) {
-					AnyView(
-						Button(role: .destructive) {
-							showingDeleteConfirmation = true
-						} label: {
-							Label("Delete", systemImage: "trash")
-								.tint(.red)
-						}
-						#if os(macOS)
-						.keyboardShortcut(.delete, modifiers: [])
-						#endif
-					)
+					Button(role: .destructive) {
+						showingDeleteConfirmation = true
+					} label: {
+						Label("Delete", systemImage: "trash")
+							.foregroundStyle(.red)
+					}
+					#if os(macOS)
+					.keyboardShortcut(.delete, modifiers: [])
+					#endif
 				}
 			}
 		}
@@ -379,6 +620,21 @@ struct SnippetDetailView: View {
 		)
 	}
 
+	private func commitTypeChange(_ newValue: SnippetType) {
+		guard !snippet.isTrashed else {
+			typeSelection = snippet.type
+			return
+		}
+		let oldValue = snippet.type
+		guard oldValue != newValue else { return }
+		snippet.type = newValue
+		finalizeChange(
+			actionName: "Change Snippet Type",
+			applyUndo: { target in target.type = oldValue },
+			applyRedo: { target in target.type = newValue }
+		)
+	}
+
 	private func finalizeChange(
 		actionName: String,
 		undoActionName: String? = nil,
@@ -388,9 +644,8 @@ struct SnippetDetailView: View {
 	) {
 		let context = modelContext
 		let previousTimestamp = oldUpdatedAt ?? snippet.updatedAt
-		withAnimation(.interactiveSpring(response: 0.3, dampingFraction: 0.85)) {
-			snippet.updatedAt = .now
-		}
+		snippet.updatedAt = .now
+
 		let newTimestamp = snippet.updatedAt
 		try? context.save()
 
@@ -447,9 +702,8 @@ struct SnippetDetailView: View {
 	private func applyTagChange(actionName: String, from oldTags: [String], to newTags: [String]) {
 		guard !snippet.isTrashed else { return }
 		guard oldTags != newTags else { return }
-		withAnimation(.easeInOut(duration: 0.2)) {
-			snippet.tags = newTags
-		}
+		snippet.tags = newTags
+
 		finalizeChange(
 			actionName: actionName,
 			applyUndo: { target in target.tags = oldTags },
