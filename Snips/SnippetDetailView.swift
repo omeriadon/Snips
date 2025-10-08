@@ -34,6 +34,8 @@ struct SnippetDetailView: View {
 	@State private var noteOriginalValue = ""
 	@State private var showingDeleteConfirmation = false
 
+	// MARK: - body
+
 	var body: some View {
 		ZStack {
 			if colorScheme == .dark {
@@ -113,6 +115,8 @@ struct SnippetDetailView: View {
 		}
 	}
 
+	// MARK: - Header Block
+
 	private var headerBlock: some View {
 		VStack(alignment: .leading, spacing: 8) {
 			HStack(alignment: .top) {
@@ -162,8 +166,6 @@ struct SnippetDetailView: View {
 					)
 					.font(.footnote)
 					.foregroundStyle(.secondary)
-					.animation(.easeInOut, value: snippet.updatedAt)
-					.contentTransition(.numericText())
 
 					Picker("", selection: $snippet.type) {
 						ForEach(SnippetType.allCases, id: \.self) { type in
@@ -211,6 +213,8 @@ struct SnippetDetailView: View {
 		}
 	}
 
+	// MARK: - Content Editor
+
 	private var contentEditor: some View {
 		Group {
 			if snippet.type == .code {
@@ -221,6 +225,7 @@ struct SnippetDetailView: View {
 					allowsUndo: true
 				)
 				.clipShape(RoundedRectangle(cornerRadius: 9))
+
 			} else {
 				TextEditor(text: $snippet.content)
 					.fontWidth(.standard)
@@ -230,7 +235,7 @@ struct SnippetDetailView: View {
 		}
 		.id(snippet.id)
 		.scrollContentBackground(.hidden)
-		.frame(minHeight: 140, maxHeight: .infinity)
+		.frame(minHeight: snippet.type == .code ? 400 : 250, maxHeight: .infinity)
 		.focused($isContentFocused)
 		.onChange(of: snippet.content, initial: false) { _, newValue in
 			guard !snippet.isTrashed else { return }
@@ -257,6 +262,8 @@ struct SnippetDetailView: View {
 			.clipShape(RoundedRectangle(cornerRadius: 15))
 		#endif
 	}
+
+	// MARK: - Note Editor
 
 	private var noteEditor: some View {
 		TextEditor(text: $snippet.note)
@@ -290,6 +297,8 @@ struct SnippetDetailView: View {
 		#endif
 	}
 
+	// MARK: - Toolbar Content
+
 	private var toolbarContent: some ToolbarContent {
 		Group {
 			if snippet.type == .code {
@@ -298,12 +307,13 @@ struct SnippetDetailView: View {
 						Picker(selection: $snippet.language) {
 							ForEach(CodeEditor.availableLanguages) { language in
 								Text("\(language.rawValue.capitalized)")
+									.fontDesign(.monospaced)
 									.tag(language)
 							}
 						} label: {}
 							.pickerStyle(.inline)
 					} label: {
-						Label("Sort", systemImage: "arrow.up.arrow.down")
+						Label("Language", systemImage: "paintpalette")
 					}
 				}
 			}
@@ -326,6 +336,7 @@ struct SnippetDetailView: View {
 							showingDeleteConfirmation = true
 						} label: {
 							Label("Delete", systemImage: "trash")
+								.tint(.red)
 						}
 						#if os(macOS)
 						.keyboardShortcut(.delete, modifiers: [])

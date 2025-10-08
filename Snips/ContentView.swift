@@ -153,13 +153,6 @@ struct ContentView: View {
 			}
 		}
 		.onChange(of: selection) {
-			selectedSnippetID = nil
-			cancelRename()
-			if let snippet = selectedSnippets.first {
-				selectedSnippetID = snippet.id
-			}
-		}
-		.onChange(of: selectedSnippetID) { _, _ in
 			cancelRename()
 		}
 		.onKeyPress(.return) {
@@ -214,7 +207,7 @@ struct ContentView: View {
 			Section {
 				ForEach(folders, id: \.id) { folder in
 					HStack {
-						Text(folder.name)
+						Label(folder.name, systemImage: "folder")
 						Spacer()
 						Text(folder.snippets.filter { !$0.isTrashed }.count.description)
 							.foregroundStyle(.secondary)
@@ -312,11 +305,6 @@ struct ContentView: View {
 			}
 		}
 		.navigationSplitViewColumnWidth(min: 250, ideal: 300, max: 600)
-		.onChange(of: sortedSnippets.map(\.id)) { _, ids in
-			if let sel = selectedSnippetID, !ids.contains(sel) {
-				selectedSnippetID = nil
-			}
-		}
 	}
 
 	private func emptyContentView() -> some View {
@@ -414,7 +402,10 @@ struct ContentView: View {
 		}
 		.frame(minHeight: 25)
 		.tag(snippet.id)
-		.draggable(snippet.transferable)
+		.draggable(snippet.transferable) {
+			Label(snippet.title, systemImage: snippet.type.symbol)
+		}
+//		.pointerStyle(.grabActive)
 		.listRowSeparator(.hidden)
 		.contextMenu {
 			snippetContextMenu(for: snippet)
@@ -634,13 +625,12 @@ struct ContentView: View {
 
 				itemInnerContent(for: item)
 					.font(.title2)
-					.foregroundStyle(.black)
 					.frame(height: 60)
 					.frame(maxWidth: .infinity)
 
 				Text("\(snippetCount(for: item))")
 					.font(.caption2.monospacedDigit())
-					.foregroundStyle(.white)
+					.foregroundStyle(item == .trash ? .primary : Color.white)
 					.padding(10)
 			}
 			.animation(.easeInOut(duration: 0.2), value: selection == item)
@@ -703,12 +693,10 @@ struct ContentView: View {
 			HStack {
 				VStack(alignment: .leading) {
 					Image(systemName: "square.grid.2x2")
-						.foregroundStyle(.white)
 						.fontWeight(.bold)
 						.imageScale(.medium)
 					Text("All")
 						.font(.title3)
-						.foregroundStyle(.white)
 				}
 				.padding(.leading, 10)
 				Spacer()
@@ -735,7 +723,6 @@ struct ContentView: View {
 			HStack {
 				VStack(alignment: .leading) {
 					Image(systemName: "folder")
-						.foregroundStyle(.black)
 						.fontWeight(.bold)
 						.imageScale(.medium)
 					Text("Folder")
@@ -750,11 +737,9 @@ struct ContentView: View {
 			HStack {
 				VStack(alignment: .leading) {
 					Image(systemName: "trash")
-						.foregroundStyle(.white)
 						.fontWeight(.bold)
 						.imageScale(.medium)
 					Text("Recycle Bin")
-						.foregroundStyle(.white)
 						.font(.title3)
 				}
 				.padding(.leading, 10)
