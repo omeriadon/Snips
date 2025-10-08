@@ -155,6 +155,9 @@ struct ContentView: View {
 		.onChange(of: selection) {
 			selectedSnippetID = nil
 			cancelRename()
+			if let snippet = selectedSnippets.first {
+				selectedSnippetID = snippet.id
+			}
 		}
 		.onChange(of: selectedSnippetID) { _, _ in
 			cancelRename()
@@ -302,7 +305,7 @@ struct ContentView: View {
 								.tag(tagForOrder(false))
 						}
 					} label: {}
-					.pickerStyle(.inline)
+						.pickerStyle(.inline)
 				} label: {
 					Label("Sort", systemImage: "arrow.up.arrow.down")
 				}
@@ -767,6 +770,7 @@ private extension ContentView {
 		guard newSnippetDraft == nil else { return }
 		let targetFolder = defaultFolderForNewSnippet()
 		let targetType = defaultTypeForNewSnippet()
+
 		let snippet = Snippet(
 			id: UUID(),
 			title: "New Snippet",

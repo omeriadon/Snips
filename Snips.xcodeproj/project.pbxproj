@@ -7,6 +7,7 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
+		A716AD532E96525F00EDBB30 /* CodeEditor in Frameworks */ = {isa = PBXBuildFile; productRef = A716AD522E96525F00EDBB30 /* CodeEditor */; };
 		A79C6F432E7056820045BC55 /* AppIcon.icon in Resources */ = {isa = PBXBuildFile; fileRef = A79C6F422E7056810045BC55 /* AppIcon.icon */; };
 /* End PBXBuildFile section */
 
@@ -28,6 +29,7 @@
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				A716AD532E96525F00EDBB30 /* CodeEditor in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -63,6 +65,7 @@
 			);
 			name = Snips;
 			packageProductDependencies = (
+				A716AD522E96525F00EDBB30 /* CodeEditor */,
 			);
 			productName = Snips;
 			productReference = A7798F562E71741F007301C4 /* Snips.app */;
@@ -92,6 +95,9 @@
 			);
 			mainGroup = A70AC0942E704354003D43A1;
 			minimizedProjectReferenceProxies = 1;
+			packageReferences = (
+				A716AD512E96525F00EDBB30 /* XCRemoteSwiftPackageReference "CodeEditor" */,
+			);
 			preferredProjectObjectVersion = 77;
 			productRefGroup = A70AC0942E704354003D43A1;
 			projectDirPath = "";
@@ -390,6 +396,25 @@
 			defaultConfigurationName = Release;
 		};
 /* End XCConfigurationList section */
+
+/* Begin XCRemoteSwiftPackageReference section */
+		A716AD512E96525F00EDBB30 /* XCRemoteSwiftPackageReference "CodeEditor" */ = {
+			isa = XCRemoteSwiftPackageReference;
+			repositoryURL = "https://github.com/ZeeZide/CodeEditor/";
+			requirement = {
+				kind = upToNextMajorVersion;
+				minimumVersion = 1.2.6;
+			};
+		};
+/* End XCRemoteSwiftPackageReference section */
+
+/* Begin XCSwiftPackageProductDependency section */
+		A716AD522E96525F00EDBB30 /* CodeEditor */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = A716AD512E96525F00EDBB30 /* XCRemoteSwiftPackageReference "CodeEditor" */;
+			productName = CodeEditor;
+		};
+/* End XCSwiftPackageProductDependency section */
 	};
 	rootObject = A70AC0952E704354003D43A1 /* Project object */;
 }

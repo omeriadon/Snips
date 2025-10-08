@@ -9,6 +9,7 @@ import Foundation
 import SwiftData
 import SwiftUI
 internal import UniformTypeIdentifiers
+import CodeEditor
 
 enum SnippetType: String, Codable, CaseIterable {
 	case path
@@ -102,6 +103,8 @@ class Snippet: Identifiable {
 
 	var content: String
 	var note: String
+
+	var language = CodeEditor.Language.swift
 
 	init(
 		id: UUID,

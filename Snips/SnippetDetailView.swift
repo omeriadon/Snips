@@ -4,6 +4,7 @@
 //  Created by Adon Omeri on 15/9/2025.
 //
 
+import CodeEditor
 import SwiftData
 import SwiftUI
 
@@ -211,30 +212,45 @@ struct SnippetDetailView: View {
 	}
 
 	private var contentEditor: some View {
-		TextEditor(text: $snippet.content)
-			.id(snippet.id)
-			.scrollContentBackground(.hidden)
-			.frame(minHeight: 140)
-			.focused($isContentFocused)
-			.onChange(of: snippet.content, initial: false) { _, newValue in
-				guard !snippet.isTrashed else { return }
-				if isContentFocused {
-					if newValue != previousContent {
-						previousContent = newValue
-						contentDirty = true
-					}
-				} else {
+		Group {
+			if snippet.type == .code {
+				CodeEditor(
+					source: $snippet.content,
+					language: snippet.language,
+					theme: CodeEditor.ThemeName(rawValue: "atelier-dune-dark"),
+					allowsUndo: true
+				)
+				.clipShape(RoundedRectangle(cornerRadius: 9))
+			} else {
+				TextEditor(text: $snippet.content)
+					.fontWidth(.standard)
+					.fontDesign(.rounded)
+					.font(.title3)
+			}
+		}
+		.id(snippet.id)
+		.scrollContentBackground(.hidden)
+		.frame(minHeight: 140, maxHeight: .infinity)
+		.focused($isContentFocused)
+		.onChange(of: snippet.content, initial: false) { _, newValue in
+			guard !snippet.isTrashed else { return }
+			if isContentFocused {
+				if newValue != previousContent {
 					previousContent = newValue
+					contentDirty = true
 				}
+			} else {
+				previousContent = newValue
 			}
-			.onChange(of: isContentFocused) { _, focused in
-				if focused {
-					contentOriginalValue = snippet.content
-				} else if contentDirty, !snippet.isTrashed {
-					finalizeContentEdit()
-				}
+		}
+		.onChange(of: isContentFocused) { _, focused in
+			if focused {
+				contentOriginalValue = snippet.content
+			} else if contentDirty, !snippet.isTrashed {
+				finalizeContentEdit()
 			}
-			.disabled(snippet.isTrashed)
+		}
+		.disabled(snippet.isTrashed)
 		#if !os(iOS)
 			.padding(6)
 			.background(.thinMaterial)
@@ -275,29 +291,47 @@ struct SnippetDetailView: View {
 	}
 
 	private var toolbarContent: some ToolbarContent {
-		if snippet.isTrashed {
-			ToolbarItem(placement: .primaryAction) {
-				AnyView(
-					Button {
-						restoreSnippet()
+		Group {
+			if snippet.type == .code {
+				ToolbarItem(placement: .confirmationAction) {
+					Menu {
+						Picker(selection: $snippet.language) {
+							ForEach(CodeEditor.availableLanguages) { language in
+								Text("\(language.rawValue.capitalized)")
+									.tag(language)
+							}
+						} label: {}
+							.pickerStyle(.inline)
 					} label: {
-						Label("Restore", systemImage: "arrow.uturn.backward")
+						Label("Sort", systemImage: "arrow.up.arrow.down")
 					}
-					.disabled(!snippet.isTrashed)
-				)
+				}
 			}
-		} else {
-			ToolbarItem(placement: .destructiveAction) {
-				AnyView(
-					Button(role: .destructive) {
-						showingDeleteConfirmation = true
-					} label: {
-						Label("Delete", systemImage: "trash")
-					}
-					#if os(macOS)
-					.keyboardShortcut(.delete, modifiers: [])
-					#endif
-				)
+
+			if snippet.isTrashed {
+				ToolbarItem(placement: .primaryAction) {
+					AnyView(
+						Button {
+							restoreSnippet()
+						} label: {
+							Label("Restore", systemImage: "arrow.uturn.backward")
+						}
+						.disabled(!snippet.isTrashed)
+					)
+				}
+			} else {
+				ToolbarItem(placement: .destructiveAction) {
+					AnyView(
+						Button(role: .destructive) {
+							showingDeleteConfirmation = true
+						} label: {
+							Label("Delete", systemImage: "trash")
+						}
+						#if os(macOS)
+						.keyboardShortcut(.delete, modifiers: [])
+						#endif
+					)
+				}
 			}
 		}
 	}
