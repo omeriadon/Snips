@@ -269,7 +269,7 @@ struct ContentView: View {
 		}
 		.navigationTitle(Text(contentColumnTitle))
 		.toolbar {
-			ToolbarItem(placement: .principal) {
+			ToolbarItem(placement: .confirmationAction) {
 				Button {
 					startNewSnippet()
 				} label: {

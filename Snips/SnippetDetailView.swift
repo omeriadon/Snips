@@ -7,6 +7,9 @@
 import CodeEditor
 import SwiftData
 import SwiftUI
+#if os(macOS)
+	import SwiftShell_Function
+#endif
 
 struct SnippetDetailView: View {
 	@Environment(\.colorScheme) private var colorScheme
@@ -45,9 +48,6 @@ struct SnippetDetailView: View {
 	@State private var unableToActionMessage = ""
 	@State private var unableToActionTitle = ""
 
-	@State private var commandOutput = ""
-	@State private var commandIsRunning = true
-	@State private var commandSucceeded: Bool = false
 	@State private var showCommandSheet = false
 
 	// MARK: - body
@@ -73,12 +73,14 @@ struct SnippetDetailView: View {
 					}
 					.listRowSeparator(.hidden)
 				Section { contentEditor } header: {
-					Text("Content")
-				} footer: {
-					if snippet.type == .command {
-						Text("Put each command on a new line.")
-					} else if snippet.type == .link {
-						Text("Do not inlcude `https://` in the link.")
+					HStack {
+						Text("Content")
+						Spacer()
+						if snippet.type == .command {
+							Text("Put each command on a new line.")
+						} else if snippet.type == .link {
+							Text("Do not include `https://` in the link.")
+						}
 					}
 				}
 				.listRowSeparator(.hidden)
@@ -293,68 +295,8 @@ struct SnippetDetailView: View {
 
 		// MARK: - Command Sheet
 
-		.sheet(
-			isPresented: $showCommandSheet,
-			onDismiss: {
-				commandOutput = ""
-				commandSucceeded = false
-				commandIsRunning = true
-			}
-		) {
-			NavigationStack {
-				ScrollView {
-					Text(commandOutput)
-						.font(.system(.body, design: .monospaced))
-						.textSelection(.enabled)
-				}
-				.navigationTitle(snippet.content)
-				.toolbar {
-					ToolbarItem(placement: .confirmationAction) {
-						Button {
-							showCommandSheet = false
-						} label: {
-							if commandIsRunning {
-								ProgressView()
-									.progressViewStyle(.linear)
-									.frame(width: 50, height: 15)
-							} else if commandSucceeded {
-								Image(systemName: "checkmark")
-									.frame(height: 15)
-							} else {
-								Image(systemName: "xmark")
-									.frame(height: 15)
-							}
-						}
-						.buttonStyle(.glassProminent)
-						.controlSize(.extraLarge)
-						.buttonBorderShape(.roundedRectangle)
-						.tint(commandIsRunning ? .gray : commandSucceeded ? .green : .red)
-						.keyboardShortcut(.escape)
-					}
-				}
-				.onAppear {
-					#if os(macOS)
-						runSwiftShell(
-							commands: snippet.content
-								.split(separator: "\n")
-								.map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
-								.filter { !$0.isEmpty }
-						) { outputLine, isRunning, success in
-							commandOutput.append(outputLine + "\n")
-							if commandOutput.count > 5000 {
-								commandOutput.removeFirst(commandOutput.count - 5000)
-							}
-							commandIsRunning = isRunning
-							if let s = success {
-								commandSucceeded = s
-							}
-						}
-					#endif
-				}
-			}
-			.interactiveDismissDisabled()
-			.presentationDetents([.large])
-			.presentationDragIndicator(.hidden)
+		.sheet(isPresented: $showCommandSheet) {
+			CommandRunnerSheet(snippet: snippet)
 		}
 		.id(snippet.id)
 		.scrollContentBackground(.hidden)
@@ -379,11 +321,9 @@ struct SnippetDetailView: View {
 			}
 		}
 		.disabled(snippet.isTrashed)
-		#if !os(iOS)
-			.padding(6)
-			.background(.thinMaterial)
-			.clipShape(RoundedRectangle(cornerRadius: 15))
-		#endif
+		.padding(6)
+		.background(.ultraThinMaterial)
+		.clipShape(RoundedRectangle(cornerRadius: 15))
 	}
 
 	// MARK: - Note Editor
@@ -413,98 +353,103 @@ struct SnippetDetailView: View {
 				}
 			}
 			.disabled(snippet.isTrashed)
-		#if !os(iOS)
 			.padding(6)
-			.background(.thinMaterial)
+			.background(.ultraThinMaterial)
 			.clipShape(RoundedRectangle(cornerRadius: 15))
-		#endif
 	}
 
 	// MARK: - Toolbar Content
 
 	private var toolbarContent: some ToolbarContent {
 		Group {
-			ToolbarItem(placement: .confirmationAction) {
-				switch snippet.type {
-				case .path:
-					AnyView(
-						Button {
-							if Device.isMac() {
-								openInFinder(snippet.content)
-							} else {
-								unableToActionTitle = "Cannot Open Path"
-								unableToActionMessage = "You need to use a Mac to open file paths."
-								showUnableToActionAlert = true
-							}
+			if !snippet.isTrashed {
+				ToolbarItem(placement: .confirmationAction) {
+					Group {
+						switch snippet.type {
+						case .path:
+							AnyView(
+								Button {
+									if Device.isMac() {
+										openInFinder(snippet.content)
+									} else {
+										unableToActionTitle = "Cannot Open Path"
+										unableToActionMessage = "You need to use a Mac to open file paths."
+										showUnableToActionAlert = true
+									}
 
-						} label: {
-							if Device.isMac() {
-								Label("Open Path", systemImage: "finder")
-							} else {
-								Label("Can't Open Path", systemImage: "exclamationmark.triangle")
-									.foregroundStyle(.yellow)
-							}
-						}
-					)
-
-				case .link:
-					AnyView(
-						Button {
-							if !openURL(snippet.content) {
-								unableToActionTitle = "Invalid URL"
-								unableToActionMessage = "You need to use a valid URL."
-								showUnableToActionAlert = true
-							}
-
-						} label: {
-							Label("Open URL", systemImage: "link")
-						}
-					)
-
-				case .plainText:
-					AnyView(EmptyView())
-
-				case .code:
-					AnyView(
-						Menu {
-							Picker(selection: $snippet.language) {
-								ForEach(CodeEditor.availableLanguages) { language in
-									Text("\(language.rawValue.capitalized)")
-										.fontDesign(.monospaced)
-										.tag(language)
+								} label: {
+									if Device.isMac() {
+										Label("Open Path", systemImage: "finder")
+									} else {
+										Label("Can't Open Path", systemImage: "exclamationmark.triangle")
+											.foregroundStyle(.yellow)
+									}
 								}
-							} label: {}
-								.pickerStyle(.inline)
-						} label: {
-							Label("Language", systemImage: "paintpalette")
+							)
+
+						case .link:
+							AnyView(
+								Button {
+									if !openURL(snippet.content) {
+										unableToActionTitle = "Invalid URL"
+										unableToActionMessage = "You need to use a valid URL."
+										showUnableToActionAlert = true
+									}
+
+								} label: {
+									Label("Open URL", systemImage: "link")
+								}
+							)
+
+						case .plainText:
+							AnyView(EmptyView())
+
+						case .code:
+							AnyView(
+								Menu {
+									Picker(selection: $snippet.language) {
+										ForEach(CodeEditor.availableLanguages) { language in
+											Text("\(language.rawValue.capitalized)")
+												.fontDesign(.monospaced)
+												.tag(language)
+										}
+									} label: {}
+										.pickerStyle(.inline)
+								} label: {
+									Label("Language", systemImage: "paintpalette")
+								}
+							)
+
+						case .command:
+							AnyView(
+								Button {
+									if Device.isMac() {
+										showCommandSheet = true
+									} else {
+										unableToActionTitle = "Cannot Run Command"
+										unableToActionMessage = "You need to use a Mac to run commands."
+										showUnableToActionAlert = true
+									}
+
+								} label: {
+									if Device.isMac() {
+										Label("Run Command", systemImage: "terminal")
+									} else {
+										Label("Can't Run Command", systemImage: "exclamationmark.triangle")
+											.foregroundStyle(.yellow)
+									}
+								}
+							)
+
+						case .secrets:
+							AnyView(EmptyView())
 						}
-					)
-
-				case .command:
-					AnyView(
-						Button {
-							if Device.isMac() {
-								showCommandSheet = true
-							} else {
-								unableToActionTitle = "Cannot Run Command"
-								unableToActionMessage = "You need to use a Mac to run commands."
-								showUnableToActionAlert = true
-							}
-
-						} label: {
-							if Device.isMac() {
-								Label("Run Command", systemImage: "terminal")
-							} else {
-								Label("Can't Run Command", systemImage: "exclamationmark.triangle")
-									.foregroundStyle(.yellow)
-							}
-						}
-					)
-
-				case .secrets:
-					AnyView(EmptyView())
+					}
+					.tint(Device.isMac() ? .accent : .red)
 				}
 			}
+
+			ToolbarSpacer()
 
 			ToolbarItem(placement: .primaryAction) {
 				Button {
@@ -513,6 +458,7 @@ struct SnippetDetailView: View {
 					Label("Copy", systemImage: "document.on.document")
 				}
 			}
+			ToolbarSpacer()
 
 			if snippet.isTrashed {
 				ToolbarItem(placement: .primaryAction) {
@@ -773,6 +719,82 @@ private struct TagChip: View {
 			.padding(.vertical, 4)
 			.padding(.horizontal, 8)
 			.onTapGesture { action() }
+	}
+}
+
+private struct CommandRunnerSheet: View {
+	@Environment(\.dismiss) private var dismiss
+	let snippet: Snippet
+
+	@State private var commandOutput = ""
+	@State private var commandIsRunning = true
+	@State private var commandSucceeded = false
+
+	var body: some View {
+		NavigationStack {
+			ScrollView {
+				Text(commandOutput)
+					.font(.system(.body, design: .monospaced))
+					.textSelection(.enabled)
+			}
+			.navigationTitle(snippet.content)
+			.toolbar {
+				ToolbarItem(placement: .confirmationAction) {
+					Button {
+						dismiss()
+					} label: {
+						if commandIsRunning {
+							ProgressView()
+								.progressViewStyle(.linear)
+								.frame(width: 50, height: 15)
+						} else if commandSucceeded {
+							Image(systemName: "checkmark")
+								.frame(height: 15)
+						} else {
+							Image(systemName: "xmark")
+								.frame(height: 15)
+						}
+					}
+					.buttonStyle(.glassProminent)
+					.controlSize(.extraLarge)
+					.buttonBorderShape(.roundedRectangle)
+					.tint(commandIsRunning ? .gray : commandSucceeded ? .green : .red)
+					.keyboardShortcut(.escape)
+				}
+			}
+		}
+		.interactiveDismissDisabled()
+		.presentationDetents([.large])
+		.presentationDragIndicator(.hidden)
+		.onAppear { startCommandExecution() }
+	}
+
+	private func startCommandExecution() {
+		commandOutput = ""
+		commandIsRunning = true
+		commandSucceeded = false
+
+		#if os(macOS)
+			runSwiftShell(
+				commands: snippet.content
+					.split(separator: "\n")
+					.map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
+					.filter { !$0.isEmpty }
+			) { outputLine, isRunning, success in
+				commandOutput.append(outputLine + "\n")
+				if commandOutput.count > 5000 {
+					commandOutput.removeFirst(commandOutput.count - 5000)
+				}
+				commandIsRunning = isRunning
+				if let result = success {
+					commandSucceeded = result
+				}
+			}
+		#else
+			commandOutput = "Command execution is supported only on macOS."
+			commandIsRunning = false
+			commandSucceeded = false
+		#endif
 	}
 }
 
